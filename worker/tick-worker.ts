@@ -28,7 +28,7 @@ async function main() {
       await orchestratorQueue.add(ORCHESTRATOR_JOB_NAME, {});
     },
     {
-      connection,
+      connection: connection as any,
       concurrency: 1,
     }
   );

@@ -16,7 +16,7 @@ const worker = new Worker(
     await processAITestcaseJob(job);
   },
   {
-    connection,
+    connection: connection as any,
     concurrency: parseInt(process.env.AI_TESTCASE_WORKER_CONCURRENCY ?? "1", 10),
   }
 );

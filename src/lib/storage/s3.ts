@@ -4,6 +4,7 @@
  */
 
 import {
+  type ObjectCannedACL,
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
@@ -98,7 +99,7 @@ export async function uploadArtifact(
       Key: fullKey,
       Body: body,
       ContentType: contentType,
-      ...(cfg.acl && { ACL: cfg.acl }),
+      ...(cfg.acl && { ACL: cfg.acl as ObjectCannedACL }),
     })
   );
   return {

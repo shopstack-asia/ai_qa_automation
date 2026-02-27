@@ -494,7 +494,7 @@ export async function runPlaywrightExecutionFromAgentExecution(
                   const el = loc.first();
                   await el.waitFor({ state: "visible", timeout: 8000 });
                   await el.clear();
-                  await el.fill(credentials.username, { timeout: 10000 });
+                  await el.fill(credentials.username ?? "", { timeout: 10000 });
                 };
                 const byLabel = await page.getByLabel(/username|email|e-?mail/i).first().count().then((c) => c > 0);
                 if (byLabel) {
@@ -521,7 +521,7 @@ export async function runPlaywrightExecutionFromAgentExecution(
                     );
                   }
                   await el.clear();
-                  await el.fill(credentials.password, { timeout: 10000 });
+                  await el.fill(credentials.password ?? "", { timeout: 10000 });
                 };
                 // Prefer input[type="password"] — do NOT use getByLabel(/password/i); it can resolve to "Show password" button
                 const passwordLoc = page.locator('input[type="password"]');
@@ -553,8 +553,8 @@ export async function runPlaywrightExecutionFromAgentExecution(
             break;
           }
           case "navigate": {
-            const url = replacePlaceholders(selector, variables) ?? baseUrl;
-            if (!isValidUrl(url)) {
+            const url = (replacePlaceholders(selector ?? undefined, variables ?? {}) ?? (baseUrl ?? undefined)) ?? undefined;
+            if (!url || !isValidUrl(url)) {
               throw new InvalidNavigationTargetError(selector ?? url);
             }
             await logStep(`Open browser at URL ${url}`, async () => {

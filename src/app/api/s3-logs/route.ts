@@ -3,6 +3,7 @@
  * Query: page, limit.
  */
 
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
   const where = {
     OR: [
       { videoUrl: { not: null } },
-      { screenshotUrls: { not: null } },
+      { screenshotUrls: { not: Prisma.DbNull } },
     ],
   };
 

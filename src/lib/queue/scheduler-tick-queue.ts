@@ -17,7 +17,7 @@ const connection = createRedisConnection();
 export const schedulerTickQueue = new Queue<Record<string, never>>(
   QUEUE_NAMES.SCHEDULER_TICK,
   {
-    connection,
+    connection: connection as any,
     defaultJobOptions: {
       removeOnComplete: { count: 100 },
       removeOnFail: false,

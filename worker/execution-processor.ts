@@ -2,6 +2,7 @@
  * Execution job processor. Flow: Load execution + testCase → PreExecutionService → PlaywrightExecutor (agent_execution only).
  * No AI in Playwright; PreExecution may call AI only for selector resolution when no knowledge.
  */
+import { Prisma } from "@prisma/client";
 import type { ExecutionJobPayload } from "../src/lib/queue/execution-queue";
 import { prisma } from "../src/lib/db/client";
 import type { ApplicationConfig } from "../src/core/data-orchestrator";
@@ -87,7 +88,7 @@ export async function processExecutionJob(payload: ExecutionJobPayload): Promise
       projectId: execution.projectId,
       applicationId: execution.testCase.applicationId ?? null,
       testCaseId: execution.testCaseId,
-      agentExecution: (execution.agentExecution as AgentExecution) ?? null,
+      agentExecution: (execution.agentExecution as unknown as AgentExecution) ?? null,
       testCase: {
         title: execution.testCase.title,
         testType: execution.testCase.testType,
@@ -160,12 +161,12 @@ export async function processExecutionJob(payload: ExecutionJobPayload): Promise
         status: executionStatus,
         duration: result.duration,
         videoUrl: result.videoUrl ?? null,
-        screenshotUrls: result.screenshotUrls?.length ? result.screenshotUrls : null,
-        stepLog: result.stepLog?.length ? result.stepLog : null,
+        screenshotUrls: result.screenshotUrls?.length ? (result.screenshotUrls as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+        stepLog: result.stepLog?.length ? (result.stepLog as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
         resultSummary: result.resultSummary ?? null,
         errorMessage: result.errorMessage ?? null,
-        executionMetadata: result.executionMetadata ?? null,
-        readableSteps: result.readableSteps ?? null,
+        executionMetadata: result.executionMetadata != null ? (result.executionMetadata as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+        readableSteps: result.readableSteps != null ? (result.readableSteps as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
         finishedAt: new Date(),
       },
     });

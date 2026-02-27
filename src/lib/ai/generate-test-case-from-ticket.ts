@@ -5,6 +5,7 @@
  */
 
 import OpenAI from "openai";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { prisma } from "@/lib/db/client";
 import { getConfig } from "@/lib/config";
 import { OPENAI_DEFAULT_MODEL } from "@/lib/config/openai-models";
@@ -241,7 +242,7 @@ export async function generateTestCaseFromTicket(
 
   const config = await getConfig();
   const model = config.openai_model || process.env.OPENAI_MODEL || OPENAI_DEFAULT_MODEL;
-  let requestMessages: Array<{ role: string; content: string }> | null = null;
+  let requestMessages: ChatCompletionMessageParam[] | null = null;
   let completion: Awaited<ReturnType<OpenAI["chat"]["completions"]["create"]>> | null = null;
 
   try {
@@ -412,7 +413,10 @@ export async function generateTestCaseFromTicket(
     const logRequest = requestMessages
       ? {
           model,
-          messages: requestMessages,
+          messages: requestMessages.map((m) => ({
+            role: m.role,
+            content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+          })),
           max_tokens: 4096,
           temperature: 0.2,
         }

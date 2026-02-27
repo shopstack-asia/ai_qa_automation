@@ -16,7 +16,7 @@ type PlatformItem = { name: string; testTypes: string[] };
 
 function normalizePlatforms(raw: unknown): PlatformItem[] {
   if (!Array.isArray(raw)) return DEFAULT_NAMES.map((name) => ({ name, testTypes: [...TEST_TYPES] }));
-  return raw.map((x) => {
+  const mapped: PlatformItem[] = raw.map((x) => {
     if (typeof x === "string" && x.trim()) return { name: x.trim(), testTypes: [...TEST_TYPES] };
     if (x && typeof x === "object" && "name" in x && typeof (x as PlatformItem).name === "string") {
       const item = x as PlatformItem;
@@ -25,8 +25,9 @@ function normalizePlatforms(raw: unknown): PlatformItem[] {
         : [...TEST_TYPES];
       return { name: String(item.name).trim(), testTypes: testTypes.length ? testTypes : [...TEST_TYPES] };
     }
-    return null;
-  }).filter((x): x is PlatformItem => x !== null && x.name.length > 0);
+    return { name: "", testTypes: [...TEST_TYPES] };
+  });
+  return mapped.filter((x) => x.name.length > 0);
 }
 
 export async function GET() {

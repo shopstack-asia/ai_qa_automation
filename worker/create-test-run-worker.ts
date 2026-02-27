@@ -17,7 +17,7 @@ async function main() {
       await runRunCreator();
     },
     {
-      connection,
+      connection: connection as any,
       concurrency: 1,
     }
   );

@@ -16,7 +16,7 @@ const connection = createRedisConnection();
 export const aiTestcaseQueue = new Queue<AITestcaseJobPayload>(
   QUEUE_NAMES.AI_TESTCASE_GENERATION,
   {
-    connection,
+    connection: connection as any,
     defaultJobOptions: {
       removeOnComplete: { count: 50 },
       removeOnFail: { count: 100 },

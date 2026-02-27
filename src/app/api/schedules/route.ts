@@ -2,6 +2,7 @@
  * GET /api/schedules?projectId= | POST – create (manager+).
  */
 
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
       cronExpression: parsed.data.cronExpression,
       testCaseIds: parsed.data.testCaseIds ?? [],
       concurrencyLimit: parsed.data.concurrencyLimit ?? 3,
-      retryPolicy: parsed.data.retryPolicy ? (parsed.data.retryPolicy as object) : null,
+      retryPolicy: parsed.data.retryPolicy ? (parsed.data.retryPolicy as object) : Prisma.DbNull,
       isActive: parsed.data.isActive ?? true,
       nextRunAt,
     },

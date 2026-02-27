@@ -17,7 +17,7 @@ async function main() {
       await runRunOrchestrator();
     },
     {
-      connection,
+      connection: connection as any,
       concurrency: 1,
     }
   );

@@ -288,7 +288,7 @@ export async function runRunCreator(): Promise<void> {
             projectId,
             applicationId: execution.testCase.applicationId ?? null,
             testCaseId,
-            agentExecution: (execution.agentExecution as AgentExecution) ?? null,
+            agentExecution: (execution.agentExecution as unknown as AgentExecution) ?? null,
             testCase: {
               title: execution.testCase.title,
               testType: execution.testCase.testType,

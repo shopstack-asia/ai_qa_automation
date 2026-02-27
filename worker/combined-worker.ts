@@ -34,7 +34,7 @@ async function main() {
       await orchestratorQueue.add(ORCHESTRATOR_JOB_NAME, {});
     },
     {
-      connection,
+      connection: connection as any,
       concurrency: 1,
     }
   );
@@ -45,7 +45,7 @@ async function main() {
       await runRunCreator();
     },
     {
-      connection,
+      connection: connection as any,
       concurrency: 1,
     }
   );
@@ -56,7 +56,7 @@ async function main() {
       await runRunOrchestrator();
     },
     {
-      connection,
+      connection: connection as any,
       concurrency: 1,
     }
   );
@@ -67,7 +67,7 @@ async function main() {
       await processAITestcaseJob(job);
     },
     {
-      connection,
+      connection: connection as any,
       concurrency: parseInt(process.env.AI_TESTCASE_WORKER_CONCURRENCY ?? "1", 10),
     }
   );
@@ -78,7 +78,7 @@ async function main() {
       await processExecutionJob(job.data);
     },
     {
-      connection,
+      connection: connection as any,
       concurrency: parseInt(process.env.WORKER_CONCURRENCY ?? "2", 10),
     }
   );

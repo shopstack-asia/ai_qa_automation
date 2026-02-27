@@ -86,7 +86,7 @@ export default function ExecutionDetailPage() {
                     : exec.status === "FAILED"
                       ? "destructive"
                       : exec.status === "IGNORE"
-                        ? "secondary"
+                        ? "queued"
                         : "default"
                 }
               >

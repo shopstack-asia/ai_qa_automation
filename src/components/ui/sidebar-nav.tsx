@@ -50,7 +50,7 @@ export function SidebarNav() {
 
   const nav = userRole === "admin" 
     ? allNavItems 
-    : allNavItems.filter((item) => !item.adminOnly);
+    : allNavItems.filter((item) => !("adminOnly" in item && item.adminOnly));
 
   return (
     <div className="flex h-full flex-col">

@@ -25,9 +25,9 @@ export function encrypt(plaintext: string): string {
   if (!plaintext) return "";
   const key = getKey();
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, key, iv, { authTagLength: TAG_LENGTH });
+  const cipher = crypto.createCipheriv(ALGORITHM, key, iv, { authTagLength: TAG_LENGTH } as crypto.CipherGCMOptions);
   const enc = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
+  const tag = (cipher as crypto.CipherGCM).getAuthTag();
   return Buffer.concat([iv, tag, enc]).toString("base64");
 }
 
@@ -41,7 +41,7 @@ export function decrypt(ciphertext: string): string {
   const iv = buf.subarray(0, IV_LENGTH);
   const tag = buf.subarray(IV_LENGTH, IV_LENGTH + TAG_LENGTH);
   const enc = buf.subarray(IV_LENGTH + TAG_LENGTH);
-  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, { authTagLength: TAG_LENGTH });
-  decipher.setAuthTag(tag);
+  const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, { authTagLength: TAG_LENGTH } as crypto.CipherGCMOptions);
+  (decipher as crypto.DecipherGCM).setAuthTag(tag);
   return decipher.update(enc).toString("utf8") + decipher.final("utf8");
 }

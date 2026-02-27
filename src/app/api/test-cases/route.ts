@@ -2,6 +2,7 @@
  * GET /api/test-cases?projectId= | POST – create.
  */
 
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
@@ -31,15 +32,17 @@ export async function GET(req: NextRequest) {
   const sortBy = req.nextUrl.searchParams.get("sortBy")?.trim() || "updatedAt";
   const sortOrder = req.nextUrl.searchParams.get("sortOrder")?.toLowerCase() === "asc" ? "asc" : "desc";
 
-  const where: { projectId: string; title?: { contains: string; mode: "insensitive" }; priority?: string; status?: string; testType?: string | null; platform?: string | null } = {
+  const priorityEnum = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
+  const statusEnum = ["DRAFT", "READY", "TESTING", "PASSED", "FAILED", "CANCEL", "IGNORE"] as const;
+  const where: { projectId: string; title?: { contains: string; mode: "insensitive" }; priority?: (typeof priorityEnum)[number]; status?: (typeof statusEnum)[number]; testType?: "API" | "E2E"; platform?: string | null } = {
     projectId,
   };
   if (search) {
     where.title = { contains: search, mode: "insensitive" };
   }
-  if (priority) where.priority = priority;
-  if (status) where.status = status;
-  if (testType) where.testType = testType;
+  if (priority && priorityEnum.includes(priority as (typeof priorityEnum)[number])) where.priority = priority as (typeof priorityEnum)[number];
+  if (status && statusEnum.includes(status as (typeof statusEnum)[number])) where.status = status as (typeof statusEnum)[number];
+  if (testType === "API" || testType === "E2E") where.testType = testType;
   if (platform) where.platform = platform;
 
   const orderField = ["title", "priority", "status", "updatedAt"].includes(sortBy) ? sortBy : "updatedAt";
@@ -135,7 +138,7 @@ export async function POST(req: NextRequest) {
       data_condition: parsed.data.data_condition ?? null,
       dataRequirement: Array.isArray(parsed.data.data_requirement) ? parsed.data.data_requirement : [],
       setup_hint: parsed.data.setup_hint ?? null,
-      structuredPlan: parsed.data.structuredPlan ? (parsed.data.structuredPlan as object) : null,
+      structuredPlan: parsed.data.structuredPlan ? (parsed.data.structuredPlan as object) : Prisma.DbNull,
       source: (parsed.data.source as "manual" | "import" | "n8n" | "AI") ?? "manual",
       primaryActor,
       createdById: auth.userId,

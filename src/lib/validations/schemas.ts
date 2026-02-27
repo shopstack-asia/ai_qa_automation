@@ -65,6 +65,7 @@ export const createEnvironmentSchema = z.object({
   applicationId: z.string().cuid().optional(),
   platform: z.string().max(255).optional(),
   type: z.enum(["API", "E2E"]).default("E2E"),
+  isActive: z.boolean().optional(),
   apiAuthMode: apiAuthModeEnum.optional(),
   e2eAuthMode: e2eAuthModeEnum.optional(),
   // API credentials (BASIC_AUTH: appKey+secretKey; BEARER_TOKEN: apiToken)

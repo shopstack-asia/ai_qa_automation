@@ -126,7 +126,7 @@ export default function S3LogsPage() {
                         {row.duration != null ? `${row.duration}ms` : "—"}
                       </TableCell>
                       <TableCell>
-                        <Button variant="outline" size="sm" asChild>
+                        <Button variant="secondary" size="sm" asChild>
                           <Link href={`/executions/${row.id}`}>View</Link>
                         </Button>
                       </TableCell>
@@ -150,7 +150,7 @@ export default function S3LogsPage() {
                       <option value={50}>50</option>
                     </select>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       disabled={page <= 1}
                       onClick={() => setPage((p) => p - 1)}
@@ -158,7 +158,7 @@ export default function S3LogsPage() {
                       Previous
                     </Button>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       disabled={page >= totalPages}
                       onClick={() => setPage((p) => p + 1)}

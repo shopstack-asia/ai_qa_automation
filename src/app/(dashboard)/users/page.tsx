@@ -226,7 +226,7 @@ export default function UsersPage() {
                     <TableCell className="whitespace-nowrap">
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         onClick={() => openEditDrawer(u)}
                       >

@@ -200,7 +200,7 @@ export async function buildInteractiveSnapshot(page: Page): Promise<InteractiveS
     return result;
   }, MAX_SNAPSHOT_ELEMENTS);
 
-  return elements as InteractiveSnapshotElement[];
+  return elements as unknown as InteractiveSnapshotElement[];
 }
 
 /** Format snapshot as JSON string for prompt */
@@ -534,8 +534,8 @@ export async function validateLocator(
     if (action === "click") {
       const isRoleSelector =
         options?.storedSelector?.trim().toLowerCase().startsWith("role:") ?? false;
-      if (isRoleSelector) {
-        const expectedName = extractExpectedNameFromRoleSelector(options.storedSelector!);
+      if (isRoleSelector && options?.storedSelector) {
+        const expectedName = extractExpectedNameFromRoleSelector(options.storedSelector);
         if (expectedName != null && expectedName !== "") {
           const actualText = await element.innerText().then((t) => (t ?? "").trim());
           if (actualText.trim().toLowerCase() !== expectedName.trim().toLowerCase()) {

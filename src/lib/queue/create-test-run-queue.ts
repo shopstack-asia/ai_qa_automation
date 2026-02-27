@@ -12,7 +12,7 @@ const connection = createRedisConnection();
 export const createTestRunQueue = new Queue<Record<string, never>>(
   QUEUE_NAMES.CREATE_TEST_RUN,
   {
-    connection,
+    connection: connection as any,
     defaultJobOptions: {
       removeOnComplete: { count: 100 },
       removeOnFail: false,

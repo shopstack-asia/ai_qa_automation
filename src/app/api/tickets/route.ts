@@ -2,6 +2,7 @@
  * GET /api/tickets?projectId= | POST – create.
  */
 
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
@@ -106,7 +107,7 @@ export async function POST(req: NextRequest) {
       status: "DRAFT",
       externalId: parsed.data.externalId ?? null,
       priority: parsed.data.priority ?? null,
-      applicationIds: parsed.data.applicationIds?.length ? parsed.data.applicationIds : null,
+      applicationIds: parsed.data.applicationIds?.length ? parsed.data.applicationIds : Prisma.DbNull,
       primaryActor: parsed.data.primaryActor ?? null,
     },
   });

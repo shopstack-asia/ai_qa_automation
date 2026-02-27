@@ -36,7 +36,7 @@ export async function GET(
   );
   const skip = (page - 1) * limit;
   const sortBy = (req.nextUrl.searchParams.get("sortBy")?.trim() || "updatedAt") as SortField;
-  const sortOrder = req.nextUrl.searchParams.get("sortOrder")?.toLowerCase() === "asc" ? "asc" : "desc";
+  const sortOrder: "asc" | "desc" = req.nextUrl.searchParams.get("sortOrder")?.toLowerCase() === "asc" ? "asc" : "desc";
 
   const where: { projectId: string; OR?: Array<{ key?: { contains: string; mode: "insensitive" }; type?: { contains: string; mode: "insensitive" }; scenario?: { contains: string; mode: "insensitive" }; role?: { contains: string; mode: "insensitive" } }> } = { projectId };
   if (search) {

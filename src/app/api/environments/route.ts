@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
         { baseUrl: { contains: search, mode: "insensitive" as const } },
       ],
     }),
-    ...(type && { type }),
+    ...(type === "API" || type === "E2E" ? { type: type as "API" | "E2E" } : {}),
     ...(isActiveParam === "true" && { isActive: true }),
     ...(isActiveParam === "false" && { isActive: false }),
   };

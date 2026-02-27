@@ -20,7 +20,7 @@ async function main() {
       await processExecutionJob(job.data);
     },
     {
-      connection,
+      connection: connection as any,
       concurrency: parseInt(process.env.WORKER_CONCURRENCY ?? "2", 10),
     }
   );

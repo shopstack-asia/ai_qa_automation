@@ -12,7 +12,7 @@ const connection = createRedisConnection();
 export const orchestratorQueue = new Queue<Record<string, never>>(
   QUEUE_NAMES.ORCHESTRATOR,
   {
-    connection,
+    connection: connection as any,
     defaultJobOptions: {
       removeOnComplete: { count: 100 },
       removeOnFail: false,

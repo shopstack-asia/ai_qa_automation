@@ -525,7 +525,7 @@ export default function ConfigPage() {
                       className="flex h-9 w-full max-w-xl rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
                       <option value="">— Select model —</option>
-                      {current && !OPENAI_ALL_MODEL_IDS.includes(current) && (
+                      {current && !OPENAI_ALL_MODEL_IDS.includes(current as (typeof OPENAI_ALL_MODEL_IDS)[number]) && (
                         <option value={current}>{current}</option>
                       )}
                       {OPENAI_MODEL_GROUPS.map((grp) => (

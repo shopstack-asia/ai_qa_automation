@@ -156,11 +156,11 @@ export default function QueueMonitorPage() {
                 <CardTitle className="text-sm font-medium text-muted-foreground">Actions</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={fetchMonitor} disabled={loading}>
+                <Button variant="secondary" size="sm" onClick={fetchMonitor} disabled={loading}>
                   {loading ? "…" : "Refresh"}
                 </Button>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   onClick={handleClean}
                   disabled={loading || actioning === "clean"}
@@ -245,7 +245,7 @@ export default function QueueMonitorPage() {
                         <TableCell>
                           <div className="flex gap-2">
                             <Button
-                              variant="outline"
+                              variant="secondary"
                               size="sm"
                               disabled={!!actioning}
                               onClick={() => j.id && handleRetry(j.id)}
@@ -253,7 +253,7 @@ export default function QueueMonitorPage() {
                               {actioning === j.id ? "…" : "Retry"}
                             </Button>
                             <Button
-                              variant="outline"
+                              variant="secondary"
                               size="sm"
                               disabled={!!actioning}
                               onClick={() => j.id && handleRemove(j.id)}

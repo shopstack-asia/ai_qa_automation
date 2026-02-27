@@ -2,6 +2,7 @@
  * GET /api/applications/[id] | PATCH | DELETE.
  */
 
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
@@ -61,7 +62,7 @@ export async function PATCH(
   if (p.platform !== undefined) data.platform = p.platform ?? null;
   if (p.testTypes !== undefined)
     data.testTypes =
-      Array.isArray(p.testTypes) && p.testTypes.length > 0 ? p.testTypes : null;
+      Array.isArray(p.testTypes) && p.testTypes.length > 0 ? p.testTypes : Prisma.DbNull;
 
   const app = await prisma.application.update({
     where: { id },

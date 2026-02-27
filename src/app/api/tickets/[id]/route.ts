@@ -3,6 +3,7 @@
  * When status is updated to READY_TO_TEST, enqueues AI test case generation job (no direct OpenAI call).
  */
 
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
@@ -83,7 +84,7 @@ export async function PATCH(
   if (movingToReady && jobId !== null) data.ai_status = "QUEUED";
   if (parsed.data.externalId !== undefined) data.externalId = parsed.data.externalId ?? null;
   if (parsed.data.priority !== undefined) data.priority = parsed.data.priority ?? null;
-  if (parsed.data.applicationIds !== undefined) data.applicationIds = parsed.data.applicationIds?.length ? parsed.data.applicationIds : null;
+  if (parsed.data.applicationIds !== undefined) data.applicationIds = parsed.data.applicationIds?.length ? parsed.data.applicationIds : Prisma.DbNull;
   if (parsed.data.primaryActor !== undefined) data.primaryActor = parsed.data.primaryActor;
 
   const ticket = await prisma.ticket.update({

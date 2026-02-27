@@ -2,6 +2,7 @@
  * GET /api/applications?projectId= | POST – create.
  */
 
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
       description: parsed.data.description ?? null,
       enabled: parsed.data.enabled ?? true,
       platform: parsed.data.platform ?? null,
-      testTypes: Array.isArray(parsed.data.testTypes) && parsed.data.testTypes.length > 0 ? parsed.data.testTypes : null,
+      testTypes: Array.isArray(parsed.data.testTypes) && parsed.data.testTypes.length > 0 ? parsed.data.testTypes : Prisma.DbNull,
     },
   });
 

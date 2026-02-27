@@ -396,7 +396,7 @@ export default function ProjectDetailPage() {
                 typeof p === "string"
                   ? { name: p, testTypes: ["API", "E2E"] }
                   : { name: p.name ?? "", testTypes: Array.isArray(p.testTypes) ? p.testTypes : ["API", "E2E"] }
-              ).filter((x) => x.name.trim())
+              ).filter((x: { name: string; testTypes: string[] }) => x.name.trim())
             : []
         );
       })
@@ -2094,7 +2094,7 @@ export default function ProjectDetailPage() {
                 </select>
                 <span className="whitespace-nowrap">/ page, total {appTotal} records</span>
                 <div className="flex items-center gap-1.5 ml-auto">
-                  <Button variant="outline" size="sm" onClick={() => goToAppPage(appPage - 1)} disabled={appPage <= 1}>
+                  <Button variant="secondary" size="sm" onClick={() => goToAppPage(appPage - 1)} disabled={appPage <= 1}>
                     Previous
                   </Button>
                   {appTotalPages <= 1 ? (
@@ -2124,7 +2124,7 @@ export default function ProjectDetailPage() {
                       );
                     })()
                   )}
-                  <Button variant="outline" size="sm" onClick={() => goToAppPage(appPage + 1)} disabled={appPage >= appTotalPages}>
+                  <Button variant="secondary" size="sm" onClick={() => goToAppPage(appPage + 1)} disabled={appPage >= appTotalPages}>
                     Next
                   </Button>
                 </div>
@@ -2189,13 +2189,13 @@ export default function ProjectDetailPage() {
                         </TableCell>
                         <TableCell className="whitespace-nowrap">
                           <div className="flex items-center gap-2">
-                            <Button type="button" variant="outline" size="sm" onClick={() => openViewApp(app)}>
+                            <Button type="button" variant="secondary" size="sm" onClick={() => openViewApp(app)}>
                               View
                             </Button>
                             {userRole !== "qa" && (
                               <Button
                                 type="button"
-                                variant="outline"
+                                variant="secondary"
                                 size="sm"
                                 className="text-destructive hover:text-destructive"
                                 onClick={() => setAppConfirmDeleteId(app.id)}
@@ -2271,7 +2271,7 @@ export default function ProjectDetailPage() {
             <span className="whitespace-nowrap">/ page, total {envTotal} records</span>
             <div className="flex items-center gap-1.5 ml-auto">
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => goToEnvPage(envPage - 1)}
                 disabled={envPage <= 1}
@@ -2308,7 +2308,7 @@ export default function ProjectDetailPage() {
                 })()
               )}
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => goToEnvPage(envPage + 1)}
                 disabled={envPage >= envTotalPages}
@@ -2376,7 +2376,7 @@ export default function ProjectDetailPage() {
                     <TableCell className="space-x-2">
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         onClick={() => {
                         setViewEnvironment(env);
@@ -2429,7 +2429,7 @@ export default function ProjectDetailPage() {
                     {userRole !== "qa" && (
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                         onClick={() => { setEnvDeleteError(""); setEnvConfirmDeleteId(env.id); }}
@@ -2510,7 +2510,7 @@ export default function ProjectDetailPage() {
             <span className="whitespace-nowrap">/ page, total {ticketTotal} records</span>
             <div className="flex items-center gap-1.5 ml-auto">
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => goToTicketPage(ticketPage - 1)}
                 disabled={ticketPage <= 1}
@@ -2547,7 +2547,7 @@ export default function ProjectDetailPage() {
                 })()
               )}
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => goToTicketPage(ticketPage + 1)}
                 disabled={ticketPage >= ticketTotalPages}
@@ -2653,7 +2653,7 @@ export default function ProjectDetailPage() {
                     <TableCell className="relative overflow-visible space-x-2">
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         onClick={() => {
                           setViewTicket(t);
@@ -2678,7 +2678,7 @@ export default function ProjectDetailPage() {
                         >
                           <Button
                             type="button"
-                            variant="outline"
+                            variant="secondary"
                             size="sm"
                             className="rounded-r-none border-0 border-r border-border"
                             onClick={() => setTicketConfirmAction({ ticketId: t.id, status: "READY_TO_TEST" })}
@@ -2687,7 +2687,7 @@ export default function ProjectDetailPage() {
                           </Button>
                           <Button
                             type="button"
-                            variant="outline"
+                            variant="secondary"
                             size="sm"
                             className="rounded-l-none px-1.5"
                             onClick={() => setTicketActionDropdownId((cur) => (cur === t.id ? null : t.id))}
@@ -2717,7 +2717,7 @@ export default function ProjectDetailPage() {
                         >
                           <Button
                             type="button"
-                            variant="outline"
+                            variant="secondary"
                             size="sm"
                             className="rounded-r-none border-0 border-r border-border"
                             onClick={() => setTicketConfirmAction({ ticketId: t.id, status: "DONE" })}
@@ -2726,7 +2726,7 @@ export default function ProjectDetailPage() {
                           </Button>
                           <Button
                             type="button"
-                            variant="outline"
+                            variant="secondary"
                             size="sm"
                             className="rounded-l-none px-1.5"
                             onClick={() => setTicketActionDropdownId((cur) => (cur === t.id ? null : t.id))}
@@ -2767,7 +2767,7 @@ export default function ProjectDetailPage() {
             <CardDescription>Test cases in this project. Search, filter, and paginate.</CardDescription>
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => loadTestCases()}>
+            <Button size="sm" variant="secondary" onClick={() => loadTestCases()}>
               <RefreshCw className="h-4 w-4 mr-1.5" />
               Refresh
             </Button>
@@ -2847,7 +2847,7 @@ export default function ProjectDetailPage() {
             <span className="whitespace-nowrap">/ page, total {tcTotal} records</span>
             <div className="flex items-center gap-1.5 ml-auto">
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => goToTcPage(tcPage - 1)}
                 disabled={tcPage <= 1 || tcLoading}
@@ -2884,7 +2884,7 @@ export default function ProjectDetailPage() {
                 })()
               )}
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => goToTcPage(tcPage + 1)}
                 disabled={tcPage >= tcTotalPages || tcLoading}
@@ -2979,11 +2979,11 @@ export default function ProjectDetailPage() {
                       {tc.updatedAt ? new Date(tc.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—"}
                     </TableCell>
                     <TableCell className="relative overflow-visible space-x-2">
-                      <Button type="button" variant="outline" size="sm" onClick={() => openViewTc(tc)}>
+                      <Button type="button" variant="secondary" size="sm" onClick={() => openViewTc(tc)}>
                         View
                       </Button>
                       {tc.status !== "DRAFT" && (
-                        <Button type="button" variant="outline" size="sm" onClick={() => openTcHistory(tc)}>
+                        <Button type="button" variant="secondary" size="sm" onClick={() => openTcHistory(tc)}>
                           <History className="h-3.5 w-3.5 mr-1" />
                           History
                         </Button>
@@ -2992,7 +2992,7 @@ export default function ProjectDetailPage() {
                         <div ref={tcActionDropdownId === tc.id ? tcActionDropdownRef : null} className="relative inline-flex rounded-md border border-border">
                           <Button
                             type="button"
-                            variant="outline"
+                            variant="secondary"
                             size="sm"
                             className="rounded-r-none border-0 border-r border-border"
                             onClick={() => setTcConfirmAction({ tcId: tc.id, status: "READY" })}
@@ -3001,7 +3001,7 @@ export default function ProjectDetailPage() {
                           </Button>
                           <Button
                             type="button"
-                            variant="outline"
+                            variant="secondary"
                             size="sm"
                             className="rounded-l-none px-1.5"
                             onClick={() => setTcActionDropdownId((cur) => (cur === tc.id ? null : tc.id))}
@@ -3040,7 +3040,7 @@ export default function ProjectDetailPage() {
                 <CardTitle>Test Runs</CardTitle>
                 <CardDescription>Schedule-driven test runs for this project. Filter, sort, and paginate.</CardDescription>
               </div>
-              <Button size="sm" variant="outline" onClick={() => loadTestRuns()}>
+              <Button size="sm" variant="secondary" onClick={() => loadTestRuns()}>
                 <RefreshCw className="h-4 w-4 mr-1.5" />
                 Refresh
               </Button>
@@ -3068,7 +3068,7 @@ export default function ProjectDetailPage() {
                 <span className="whitespace-nowrap">/ page, total {trTotal} records</span>
                 <div className="flex items-center gap-1.5 ml-auto">
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() => goToTrPage(trPage - 1)}
                     disabled={trPage <= 1 || testRunsLoading}
@@ -3105,7 +3105,7 @@ export default function ProjectDetailPage() {
                     })()
                   )}
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() => goToTrPage(trPage + 1)}
                     disabled={trPage >= trTotalPages || testRunsLoading}
@@ -3172,7 +3172,7 @@ export default function ProjectDetailPage() {
                         <TableCell>{run.passed}</TableCell>
                         <TableCell>{run.failed}</TableCell>
                         <TableCell>
-                          <Button type="button" variant="outline" size="sm" onClick={() => { setViewTestRunId(run.id); setRunDetailPage(1); }}>
+                          <Button type="button" variant="secondary" size="sm" onClick={() => { setViewTestRunId(run.id); setRunDetailPage(1); }}>
                             View Details
                           </Button>
                         </TableCell>
@@ -3224,7 +3224,7 @@ export default function ProjectDetailPage() {
                 </select>
                 <span className="whitespace-nowrap">/ page, total {dkTotal} records</span>
                 <div className="flex items-center gap-1.5 ml-auto">
-                  <Button variant="outline" size="sm" onClick={() => goToDkPage(dkPage - 1)} disabled={dkPage <= 1 || dataKnowledgeLoading}>
+                  <Button variant="secondary" size="sm" onClick={() => goToDkPage(dkPage - 1)} disabled={dkPage <= 1 || dataKnowledgeLoading}>
                     Previous
                   </Button>
                   {dkTotalPages <= 1 ? (
@@ -3254,7 +3254,7 @@ export default function ProjectDetailPage() {
                       );
                     })()
                   )}
-                  <Button variant="outline" size="sm" onClick={() => goToDkPage(dkPage + 1)} disabled={dkPage >= dkTotalPages || dataKnowledgeLoading}>
+                  <Button variant="secondary" size="sm" onClick={() => goToDkPage(dkPage + 1)} disabled={dkPage >= dkTotalPages || dataKnowledgeLoading}>
                     Next
                   </Button>
                 </div>
@@ -3322,12 +3322,12 @@ export default function ProjectDetailPage() {
                           {userRole !== "qa" && (
                             <TableCell className="whitespace-nowrap">
                               <div className="flex items-center gap-2">
-                                <Button type="button" variant="outline" size="sm" onClick={() => openDkModal(row)}>
+                                <Button type="button" variant="secondary" size="sm" onClick={() => openDkModal(row)}>
                                   Edit
                                 </Button>
                                 <Button
                                   type="button"
-                                  variant="outline"
+                                  variant="secondary"
                                   size="sm"
                                   className="text-destructive hover:text-destructive"
                                   onClick={() => setDkConfirmDeleteId(row.id)}
@@ -3391,7 +3391,7 @@ export default function ProjectDetailPage() {
                 <span className="whitespace-nowrap">/ page, total {skTotal} records</span>
                 <div className="flex items-center gap-1.5 ml-auto">
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() => goToSkPage(skPage - 1)}
                     disabled={skPage <= 1 || selectorKnowledgeLoading}
@@ -3428,7 +3428,7 @@ export default function ProjectDetailPage() {
                     })()
                   )}
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() => goToSkPage(skPage + 1)}
                     disabled={skPage >= skTotalPages || selectorKnowledgeLoading}
@@ -3601,7 +3601,7 @@ export default function ProjectDetailPage() {
                                   >
                                     {title}
                                   </span>
-                                  <Badge variant={e.status === "PASSED" ? "success" : e.status === "FAILED" ? "destructive" : e.status === "IGNORE" ? "secondary" : "default"} className="text-xs shrink-0 ml-auto">{e.status}</Badge>
+                                  <Badge variant={e.status === "PASSED" ? "success" : e.status === "FAILED" ? "destructive" : e.status === "IGNORE" ? "queued" : "default"} className="text-xs shrink-0 ml-auto">{e.status}</Badge>
                                 </div>
                                 <p className="mt-1.5 text-xs text-muted-foreground">
                                   Execution time: {startStr} – {endStr} ({durationStr})
@@ -3622,7 +3622,7 @@ export default function ProjectDetailPage() {
                             </span>
                             <div className="flex items-center gap-1">
                               <Button
-                                variant="outline"
+                                variant="secondary"
                                 size="sm"
                                 onClick={() => setRunDetailPage((p) => Math.max(1, p - 1))}
                                 disabled={page <= 1}
@@ -3630,7 +3630,7 @@ export default function ProjectDetailPage() {
                                 Previous
                               </Button>
                               <Button
-                                variant="outline"
+                                variant="secondary"
                                 size="sm"
                                 onClick={() => setRunDetailPage((p) => Math.min(totalPages, p + 1))}
                                 disabled={page >= totalPages}
@@ -3812,8 +3812,8 @@ export default function ProjectDetailPage() {
           </DialogHeader>
           {appDeleteError && <p className="text-sm text-destructive">{appDeleteError}</p>}
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => { setAppConfirmDeleteId(null); setAppDeleteError(""); }}>Cancel</Button>
-            <Button variant="destructive" disabled={appDeleting} onClick={() => appConfirmDeleteId && deleteApplication(appConfirmDeleteId)}>
+            <Button variant="secondary" onClick={() => { setAppConfirmDeleteId(null); setAppDeleteError(""); }}>Cancel</Button>
+            <Button variant="danger" disabled={appDeleting} onClick={() => appConfirmDeleteId && deleteApplication(appConfirmDeleteId)}>
               {appDeleting ? "Deleting…" : "Delete"}
             </Button>
           </div>
@@ -3827,7 +3827,7 @@ export default function ProjectDetailPage() {
               <SheetTitle className="mb-0">{dkEditingId ? "Edit Data Knowledge" : "Add Data Knowledge"}</SheetTitle>
               <div className="flex gap-2 shrink-0">
                 {dkEditingId && (
-                  <Button type="button" variant="outline" size="sm" onClick={closeDkModal}>
+                  <Button type="button" variant="secondary" size="sm" onClick={closeDkModal}>
                     Cancel
                   </Button>
                 )}
@@ -3897,8 +3897,8 @@ export default function ProjectDetailPage() {
             <DialogDescription>This cannot be undone.</DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setDkConfirmDeleteId(null)}>Cancel</Button>
-            <Button variant="destructive" disabled={dkDeleting} onClick={() => dkConfirmDeleteId && deleteDataKnowledge(dkConfirmDeleteId)}>
+            <Button variant="secondary" onClick={() => setDkConfirmDeleteId(null)}>Cancel</Button>
+            <Button variant="danger" disabled={dkDeleting} onClick={() => dkConfirmDeleteId && deleteDataKnowledge(dkConfirmDeleteId)}>
               {dkDeleting ? "Deleting…" : "Delete"}
             </Button>
           </div>
@@ -4043,7 +4043,7 @@ export default function ProjectDetailPage() {
                       <label className="block text-sm font-medium text-muted-foreground">Username / Password<br /><span className="font-normal">(multiple roles, leave blank to keep for password)</span></label>
                       <Button
                         type="button"
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         className="h-8 w-8 p-0"
                         onClick={() => setEnvForm((p) => ({ ...p, credentials: [...p.credentials, { role: "", username: "", password: "" }] }))}
@@ -4283,7 +4283,7 @@ export default function ProjectDetailPage() {
                           {userRole !== "qa" && (
                             <Button
                               type="button"
-                              variant="outline"
+                              variant="secondary"
                               size="sm"
                               className="h-8 w-8 p-0"
                               onClick={() => setViewEnvForm((p) => p ? { ...p, credentials: [...p.credentials, { role: "", username: "", password: "" }] } : p)}
@@ -4382,7 +4382,7 @@ export default function ProjectDetailPage() {
             </Button>
             <Button
               type="button"
-              variant="destructive"
+              variant="danger"
               onClick={() => envConfirmDeleteId && deleteEnvironment(envConfirmDeleteId)}
               disabled={envDeleting}
             >
@@ -4443,7 +4443,7 @@ export default function ProjectDetailPage() {
                       <label className="block text-sm font-medium text-muted-foreground">Title</label>
                       <Input
                         value={viewTicketEditForm.title}
-                        onChange={(e) => setViewTicketEditForm((p) => ({ ...p, title: e.target.value }))}
+                        onChange={(e) => setViewTicketEditForm((p) => (p ? { ...p, title: e.target.value } : null))}
                         placeholder="e.g. User login flow"
                         required
                       />
@@ -4452,7 +4452,7 @@ export default function ProjectDetailPage() {
                       <label className="block text-sm font-medium text-muted-foreground">Description (optional)</label>
                       <textarea
                         value={viewTicketEditForm.description}
-                        onChange={(e) => setViewTicketEditForm((p) => ({ ...p, description: e.target.value }))}
+                        onChange={(e) => setViewTicketEditForm((p) => (p ? { ...p, description: e.target.value } : null))}
                         placeholder="General description..."
                         rows={6}
                         className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
@@ -4462,7 +4462,7 @@ export default function ProjectDetailPage() {
                       <label className="block text-sm font-medium text-muted-foreground">Acceptance criteria (optional)</label>
                       <textarea
                         value={viewTicketEditForm.acceptanceCriteria}
-                        onChange={(e) => setViewTicketEditForm((p) => ({ ...p, acceptanceCriteria: e.target.value }))}
+                        onChange={(e) => setViewTicketEditForm((p) => (p ? { ...p, acceptanceCriteria: e.target.value } : null))}
                         placeholder="Used for generating test cases..."
                         rows={6}
                         className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
@@ -4472,7 +4472,7 @@ export default function ProjectDetailPage() {
                       <label className="block text-sm font-medium text-muted-foreground">Priority (optional)</label>
                       <select
                         value={viewTicketEditForm.priority}
-                        onChange={(e) => setViewTicketEditForm((p) => ({ ...p, priority: e.target.value }))}
+                        onChange={(e) => setViewTicketEditForm((p) => (p ? { ...p, priority: e.target.value } : null))}
                         className={selectClass}
                       >
                         <option value="">— None —</option>
@@ -4486,7 +4486,7 @@ export default function ProjectDetailPage() {
                       <label className="block text-sm font-medium text-muted-foreground">External ID (optional)</label>
                       <Input
                         value={viewTicketEditForm.externalId}
-                        onChange={(e) => setViewTicketEditForm((p) => ({ ...p, externalId: e.target.value }))}
+                        onChange={(e) => setViewTicketEditForm((p) => (p ? { ...p, externalId: e.target.value } : null))}
                         placeholder="e.g. PROJ-123"
                       />
                     </div>
@@ -4508,7 +4508,7 @@ export default function ProjectDetailPage() {
                                   <button
                                     type="button"
                                     onClick={() =>
-                                      setViewTicketEditForm((p) => ({ ...p, applicationIds: p.applicationIds.filter((x) => x !== appId) }))
+                                      setViewTicketEditForm((p) => (p ? { ...p, applicationIds: p.applicationIds.filter((x) => x !== appId) } : null))
                                     }
                                     className="rounded hover:bg-background p-0.5"
                                     aria-label={`Remove ${app?.name ?? appId}`}
@@ -4525,7 +4525,7 @@ export default function ProjectDetailPage() {
                                 key={a.id}
                                 type="button"
                                 onClick={() =>
-                                  setViewTicketEditForm((p) => ({ ...p, applicationIds: [...p.applicationIds, a.id] }))
+                                  setViewTicketEditForm((p) => (p ? { ...p, applicationIds: [...p.applicationIds, a.id] } : null))
                                 }
                                 className="rounded-md border border-border bg-background px-2 py-1 text-xs hover:bg-elevated"
                               >
@@ -4611,7 +4611,7 @@ export default function ProjectDetailPage() {
             </Button>
             <Button
               type="button"
-              variant={ticketConfirmAction?.status === "CANCEL" ? "destructive" : "default"}
+              variant={ticketConfirmAction?.status === "CANCEL" ? "danger" : "secondary"}
               onClick={() => {
                 if (ticketConfirmAction) {
                   updateTicketStatus(ticketConfirmAction.ticketId, ticketConfirmAction.status);
@@ -4930,7 +4930,7 @@ export default function ProjectDetailPage() {
                     <label className="block text-sm font-medium text-muted-foreground">Test steps</label>
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       className="h-8 w-8 p-0"
                       onClick={() => setTcForm((p) => ({ ...p, testSteps: [...p.testSteps, ""] }))}
@@ -5146,7 +5146,7 @@ export default function ProjectDetailPage() {
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <label className="block text-sm font-medium text-muted-foreground">Test steps</label>
-                          <Button type="button" variant="outline" size="sm" className="h-8 w-8 p-0" onClick={() => setViewTcForm((p) => p ? { ...p, testSteps: [...p.testSteps, ""] } : p)}>
+                          <Button type="button" variant="secondary" size="sm" className="h-8 w-8 p-0" onClick={() => setViewTcForm((p) => p ? { ...p, testSteps: [...p.testSteps, ""] } : p)}>
                             <Plus className="h-4 w-4" />
                           </Button>
                         </div>
@@ -5299,7 +5299,7 @@ export default function ProjectDetailPage() {
           </DialogHeader>
           <DialogFooter>
             <Button type="button" variant="secondary" onClick={() => setTcConfirmAction(null)}>No</Button>
-            <Button type="button" variant={tcConfirmAction?.status === "CANCEL" ? "destructive" : "default"} onClick={() => { if (tcConfirmAction) { updateTestCaseStatus(tcConfirmAction.tcId, tcConfirmAction.status); setTcConfirmAction(null); } }}>Yes</Button>
+            <Button type="button" variant={tcConfirmAction?.status === "CANCEL" ? "danger" : "secondary"} onClick={() => { if (tcConfirmAction) { updateTestCaseStatus(tcConfirmAction.tcId, tcConfirmAction.status); setTcConfirmAction(null); } }}>Yes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -5324,7 +5324,7 @@ export default function ProjectDetailPage() {
                   <div className="flex items-center gap-1">
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       onClick={() => setTcHistoryIndex((i) => Math.max(0, i - 1))}
                       disabled={tcHistoryIndex <= 0}
@@ -5334,7 +5334,7 @@ export default function ProjectDetailPage() {
                     </Button>
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       onClick={() => setTcHistoryIndex((i) => Math.min(tcHistoryExecutionIds.length - 1, i + 1))}
                       disabled={tcHistoryIndex >= tcHistoryExecutionIds.length - 1}

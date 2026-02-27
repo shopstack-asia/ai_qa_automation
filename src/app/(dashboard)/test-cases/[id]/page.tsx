@@ -161,7 +161,7 @@ export default function TestCaseDetailPage() {
                         : tc.latestExecution.status === "FAILED"
                           ? "destructive"
                           : tc.latestExecution.status === "IGNORE"
-                            ? "secondary"
+                            ? "queued"
                             : "default"
                     }
                   >

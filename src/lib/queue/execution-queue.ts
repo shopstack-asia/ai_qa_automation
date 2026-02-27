@@ -21,7 +21,7 @@ export interface ExecutionJobPayload {
 const connection = createRedisConnection();
 
 export const executionQueue = new Queue<ExecutionJobPayload>(QUEUE_NAMES.EXECUTION, {
-  connection,
+  connection: connection as any,
   defaultJobOptions: {
     attempts: 3,
     backoff: { type: "exponential", delay: 2000 },

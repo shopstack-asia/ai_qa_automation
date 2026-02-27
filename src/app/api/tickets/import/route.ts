@@ -2,6 +2,7 @@
  * POST /api/tickets/import – bulk create tickets. Body: { projectId, tickets: [{ title, description?, acceptanceCriteria?, externalId?, priority?, platforms? }] }
  */
 
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { requirePermission } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
           status: "DRAFT",
           externalId: t.externalId ?? null,
           priority: t.priority ?? null,
-          applicationIds: t.applicationIds?.length ? t.applicationIds : null,
+          applicationIds: t.applicationIds?.length ? t.applicationIds : Prisma.DbNull,
         },
       })
     )
