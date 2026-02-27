@@ -3,8 +3,8 @@
 # Run web:  docker run ... ai-qa-platform
 # Run worker: docker run ... ai-qa-platform npm run worker
 
-# Playwright image includes Node + Chromium and system deps (match Playwright version in package.json).
-ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.49.0-noble
+# Playwright image includes Node + Chromium and system deps (match Playwright version in node_modules).
+ARG PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.58.2-noble
 FROM ${PLAYWRIGHT_IMAGE} AS base
 WORKDIR /app
 
