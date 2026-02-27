@@ -1,0 +1,419 @@
+// AI QA Automation Platform – Production Schema
+// PostgreSQL, JSONB for plans/logs, encrypted credentials via application layer
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// RBAC
+// =============================================================================
+
+enum Role {
+  admin
+  manager
+  qa
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  passwordHash String?  // Optional for OAuth users
+  name      String?
+  role      Role     @default(qa)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  executionsCreated Execution[] @relation("CreatedBy")
+  testCasesCreated  TestCase[]   @relation("TestCaseCreatedBy")
+  systemConfigUpdates SystemConfig[]
+}
+
+// =============================================================================
+// System configuration (Admin only)
+// =============================================================================
+
+model SystemConfig {
+  id                    String   @id @default(cuid())
+  key                   String   @unique
+  value                 String   // JSON string for complex values
+  description           String?
+  updatedAt             DateTime @updatedAt
+  updatedByUserId       String?
+  updatedByUser         User?    @relation(fields: [updatedByUserId], references: [id])
+}
+
+// =============================================================================
+// API Keys (N8N / external integration – name + hashed key)
+// =============================================================================
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  name      String   @unique  // e.g. "N8N Production", "CI"
+  keyHash   String   // bcrypt hash; never store plain key
+  createdAt DateTime @default(now())
+}
+
+// =============================================================================
+// OpenAI request/response logs (Monitoring)
+// =============================================================================
+
+model OpenAILog {
+  id               String   @id @default(cuid())
+  source           String   // e.g. "generate-test-case-from-ticket", "generate-plan", "step-resolver"
+  model            String?
+  requestPayload   Json     // { messages, max_tokens, temperature } – no API key
+  responsePayload  Json     // completion response (choices, usage, etc.)
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  estimatedCostUsd Float?   // estimated cost in USD based on model + usage
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([source])
+}
+
+// =============================================================================
+// Projects
+// =============================================================================
+
+enum ExecutionStrategy {
+  sequential
+  parallel
+  adaptive
+}
+
+model Project {
+  id                        String              @id @default(cuid())
+  name                      String
+  jiraProjectKey            String?
+  n8nWebhookToken           String?             // encrypted at application layer
+  defaultExecutionStrategy  ExecutionStrategy   @default(sequential)
+  isActive                  Boolean             @default(true)
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+
+  applications     Application[]
+  dataKnowledges   DataKnowledge[]
+  environments     Environment[]
+  selectorKnowledges SelectorKnowledge[]
+  testCases         TestCase[]
+  tickets           Ticket[]
+  testRuns          TestRun[]
+  executions        Execution[]
+  schedules         Schedule[]
+}
+
+// =============================================================================
+// Test Run (orchestration per project; schedule-driven)
+// =============================================================================
+
+enum TestRunStatus {
+  RUNNING
+  COMPLETED
+}
+
+model TestRun {
+  id          String        @id @default(cuid())
+  projectId   String
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status      TestRunStatus @default(RUNNING)
+  startedAt   DateTime      @default(now())
+  completedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  executions Execution[]
+
+  @@index([projectId])
+  @@index([projectId, status])
+  @@index([status])
+}
+
+// =============================================================================
+// Applications (per project: name, code, platform, test types from config)
+// =============================================================================
+
+model Application {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  code        String   // unique per project
+  description String?
+  enabled     Boolean  @default(true)
+  platform    String?  // from config platform list
+  testTypes   Json?    // string[] e.g. ["API", "E2E"] – from platform config
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  environments      Environment[]
+  selectorKnowledges SelectorKnowledge[]
+  testCases        TestCase[]
+
+  @@unique([projectId, code])
+  @@index([projectId])
+}
+
+// =============================================================================
+// Tickets (source for creating test cases)
+// =============================================================================
+
+model Ticket {
+  id                  String   @id @default(cuid())
+  projectId           String
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title               String
+  description         String?  // free-form description
+  acceptanceCriteria  String?  // AC used to generate TC
+  status              String   @default("DRAFT") // DRAFT | READY_TO_TEST | DONE | CANCEL
+  type                String?  // BUG | FEATURE | etc. – used e.g. to exclude BUG from test case export
+  ai_status           String?  // QUEUED | RETRYING | GENERATED | FAILED (AI test case generation)
+  externalId          String?  // e.g. Jira ticket key
+  priority            String?
+  applicationIds      Json?    // string[] of application ids (project applications)
+  primaryActor        String?  @map("primary_actor") // E2E: match this to role in env credentialsEnc; null = use first row
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  testCases TestCase[]
+
+  @@index([projectId])
+  @@index([projectId, status])
+}
+
+// =============================================================================
+// Environments (credentials encrypted at application layer before save)
+// =============================================================================
+
+enum EnvironmentType {
+  API
+  E2E
+}
+
+enum ApiAuthMode {
+  NONE
+  BASIC_AUTH
+  BEARER_TOKEN
+}
+
+enum E2eAuthMode {
+  ALWAYS_AUTH
+  NEVER_AUTH
+  CONDITIONAL
+}
+
+model Environment {
+  id              String           @id @default(cuid())
+  projectId       String
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  applicationId   String?
+  application     Application?     @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  name            String
+  baseUrl         String
+  platform        String?          // denormalized from application for display
+  usernameEnc     String?          // legacy single E2E credential
+  passwordEnc     String?          // legacy
+  apiTokenEnc     String?          // legacy
+  appKeyEnc       String?          // API credential (encrypted)
+  secretKeyEnc    String?          // API credential (encrypted)
+  credentialsEnc  String?         // E2E: encrypted JSON array of { role, username, password }
+  type            EnvironmentType  @default(E2E)
+  isActive        Boolean          @default(true)
+  apiAuthMode     ApiAuthMode      @default(NONE) @map("api_auth_mode")
+  e2eAuthMode     E2eAuthMode      @default(NEVER_AUTH) @map("e2e_auth_mode")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  executions Execution[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@index([applicationId])
+}
+
+// =============================================================================
+// Data knowledge (structured test input storage, used by resolver layer)
+// =============================================================================
+
+model DataKnowledge {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  key       String
+  type      String
+  scenario  String
+  role      String?
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, key])
+  @@index([projectId])
+}
+
+// =============================================================================
+// Selector knowledge (per project/application, reused across executions)
+// =============================================================================
+
+model SelectorKnowledge {
+  id              String    @id @default(cuid())
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  applicationId   String
+  application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  semanticKey     String    // normalized step key for lookup
+  selector        String
+  confidenceScore Float    @default(1.0)
+  usageCount      Int      @default(0)
+  lastVerifiedAt  DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([projectId, applicationId, semanticKey])
+  @@index([projectId])
+  @@index([applicationId])
+  @@index([semanticKey])
+}
+
+// =============================================================================
+// Test cases (static definition: title, testSteps, expectedResult, metadata)
+// =============================================================================
+
+enum TestCasePriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TestCaseStatus {
+  DRAFT
+  READY
+  TESTING
+  PASSED
+  FAILED
+  CANCEL
+  IGNORE
+}
+
+enum TestCaseSource {
+  manual
+  import
+  n8n
+  AI
+}
+
+model TestCase {
+  id              String           @id @default(cuid())
+  projectId       String
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ticketId        String?          // optional: ticket this TC was created from
+  ticket          Ticket?          @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  applicationId   String?          // from ticket's applications
+  application     Application?     @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  title           String
+  priority        TestCasePriority  @default(MEDIUM)
+  status          TestCaseStatus    @default(DRAFT)
+  testType        EnvironmentType?  // API | E2E – from application's testTypes
+  platform        String?           // denormalized from application for display
+  testSteps       String[]         @default([])  // ordered list of step descriptions
+  expectedResult  String?           // expected outcome text
+  category        String?           // FUNCTIONAL | NEGATIVE | VALIDATION | SECURITY | etc.
+  data_condition  String?           // RECORD_MUST_EXIST | RECORD_MUST_NOT_EXIST | etc.
+  dataRequirement Json?             @default("[]") @map("data_requirement") // structured intent + alias for resolver; [{ alias, type, scenario, role? }]
+  setup_hint      String?           // optional setup / preconditions hint
+  structuredPlan  Json?             // JSONB: validated by Zod
+  ignoreReason    String?           // when status = ignore: e.g. "No env in schedule for testType X and application Y"
+  source          TestCaseSource    @default(manual)
+  primaryActor    String?          @map("primary_actor") // inherited from Ticket; E2E credential role for execution
+  createdById    String?
+  createdBy      User?             @relation("TestCaseCreatedBy", fields: [createdById], references: [id])
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  executions Execution[]
+
+  @@index([projectId])
+  @@index([projectId, status])
+  @@index([ticketId])
+  @@index([applicationId])
+}
+
+// =============================================================================
+// Executions (step_log, screenshot_urls JSONB)
+// =============================================================================
+
+enum ExecutionStatus {
+  QUEUED
+  RUNNING
+  PASSED
+  FAILED
+  IGNORE
+}
+
+model Execution {
+  id              String           @id @default(cuid())
+  runId           String?          // FK to TestRun; required for schedule-driven runs
+  run             TestRun?         @relation(fields: [runId], references: [id], onDelete: SetNull)
+  projectId       String
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environmentId   String
+  environment     Environment      @relation(fields: [environmentId], references: [id], onDelete: Restrict)
+  testCaseId      String
+  testCase        TestCase         @relation(fields: [testCaseId], references: [id], onDelete: Restrict)
+  status          ExecutionStatus  @default(QUEUED)
+  duration        Int?             // milliseconds
+  videoUrl        String?
+  screenshotUrls  Json?            // JSONB array of URLs
+  stepLog         Json?            // JSONB array of step results
+  resultSummary   String?
+  errorMessage    String?
+  agentExecution  Json?            @map("agent_execution") // runtime plan snapshot; NOT from TestCase
+  executionMetadata Json?          @map("execution_metadata") // base_url, test_data (masked) for UI
+  readableSteps   Json?            @map("readable_steps") // human-readable step descriptions
+  triggeredById   String?
+  triggeredBy     User?            @relation("CreatedBy", fields: [triggeredById], references: [id])
+  createdAt       DateTime        @default(now())
+  startedAt      DateTime?
+  finishedAt      DateTime?
+
+  @@index([projectId])
+  @@index([projectId, status])
+  @@index([runId])
+  @@index([runId, status])
+  @@index([environmentId])
+  @@index([testCaseId])
+  @@index([createdAt])
+}
+
+// =============================================================================
+// Scheduler (cron per project)
+// =============================================================================
+
+model Schedule {
+  id                String   @id @default(cuid())
+  projectId         String
+  project           Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environmentIds    String[]  // multiple environments per schedule
+  name              String
+  cronExpression    String    // e.g. "0 9 * * 1-5"
+  testCaseIds       String[]  @default([]) // empty = sweep all ready TCs in project
+  concurrencyLimit  Int       @default(3)
+  retryPolicy       Json?     // { maxRetries: number, backoffMs: number }
+  isActive          Boolean   @default(true)
+  lastRunAt         DateTime?
+  nextRunAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([projectId])
+  @@index([nextRunAt])
+}

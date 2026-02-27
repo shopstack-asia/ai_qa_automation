@@ -1,0 +1,68 @@
+# Run full stack: Postgres, Redis, Next.js app, and combined worker.
+# Build:  docker compose build
+# Up:    docker compose up -d
+# Logs:  docker compose logs -f app worker
+# Ensure .env has DATABASE_URL and REDIS_URL (or set below).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: qa
+      POSTGRES_PASSWORD: qa
+      POSTGRES_DB: qa
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qa -d qa"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://qa:qa@postgres:5432/qa
+      REDIS_URL: redis://redis:6379
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Optional: use migrate instead of db push
+    # command: sh -c "npx prisma migrate deploy && npx prisma db seed && next start"
+
+  worker:
+    build: .
+    command: npm run worker
+    environment:
+      DATABASE_URL: postgresql://qa:qa@postgres:5432/qa
+      REDIS_URL: redis://redis:6379
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Recommended for Chromium stability in containers
+    ipc: host
+
+volumes:
+  postgres_data: {}
