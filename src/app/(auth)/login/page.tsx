@@ -34,8 +34,8 @@ function LoginForm() {
         setError(data.error ?? "Login failed");
         return;
       }
-      router.push("/");
-      router.refresh();
+      // Full page navigation so the new session cookie is sent; router.push() can run before cookie is applied
+      window.location.href = "/";
     } catch {
       setError("Network error");
     } finally {
