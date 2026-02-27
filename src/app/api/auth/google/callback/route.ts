@@ -102,9 +102,12 @@ export async function GET(req: NextRequest) {
 
     // Set session cookie and redirect to dashboard
     const res = NextResponse.redirect(new URL("/", req.url));
+    const isHttps =
+      req.nextUrl.protocol === "https:" ||
+      req.headers.get("x-forwarded-proto") === "https";
     res.cookies.set(sessionCookieName(), token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: isHttps,
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7,
       path: "/",
