@@ -36,6 +36,9 @@ let cacheTs = 0;
 const CACHE_MS = 30_000;
 
 export async function getConfig(): Promise<ConfigMap> {
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return { ...CONFIG_DEFAULTS } as ConfigMap;
+  }
   const now = Date.now();
   if (cache && now - cacheTs < CACHE_MS) {
     return cache;

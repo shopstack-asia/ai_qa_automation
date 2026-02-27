@@ -14,6 +14,9 @@ export interface AuthResult {
 }
 
 export async function requireAuth(): Promise<AuthResult | NextResponse> {
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -6,7 +6,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { createRedisConnection } from "@/lib/queue/config";
 
+/** Skip DB/Redis during Next.js build (no services available in Docker build). */
+const isBuildTime = () => process.env.NEXT_PHASE === "phase-production-build";
+
 export async function GET() {
+  if (isBuildTime()) {
+    return NextResponse.json({ db: "down", redis: "down" }, { status: 503 });
+  }
+
   const status: { db: "up" | "down"; redis: "up" | "down" } = {
     db: "down",
     redis: "down",

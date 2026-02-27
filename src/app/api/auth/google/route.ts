@@ -5,7 +5,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getConfig } from "@/lib/config";
 
+const isBuildTime = () => process.env.NEXT_PHASE === "phase-production-build";
+
 export async function GET(req: NextRequest) {
+  if (isBuildTime()) {
+    return NextResponse.json({ error: "Not available during build" }, { status: 400 });
+  }
   const config = await getConfig();
   const clientId = config.google_client_id;
   const allowedDomain = config.google_allowed_domain;

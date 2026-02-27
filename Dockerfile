@@ -17,6 +17,9 @@ COPY . .
 # Generate Prisma client and build Next.js.
 RUN npx prisma generate
 ENV NEXT_TELEMETRY_DISABLED=1
+# Dummy env vars so build can complete without real DB/Redis (routes short-circuit when NEXT_PHASE=phase-production-build).
+ENV DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build
+ENV REDIS_URL=redis://127.0.0.1:6379
 RUN npm run build
 
 # Default: run Next.js (DB push + seed + start). Override CMD to run worker.
