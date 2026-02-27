@@ -1,5 +1,6 @@
 /**
  * BullMQ execution queue: API enqueues, worker consumes.
+ * Queue is created lazily so Next.js build (no Redis) does not connect at module load.
  */
 
 import { Queue } from "bullmq";
@@ -18,15 +19,26 @@ export interface ExecutionJobPayload {
   };
 }
 
-const connection = createRedisConnection();
+let _queue: Queue<ExecutionJobPayload> | null = null;
+function getQueue(): Queue<ExecutionJobPayload> {
+  if (!_queue) {
+    const connection = createRedisConnection();
+    _queue = new Queue<ExecutionJobPayload>(QUEUE_NAMES.EXECUTION, {
+      connection: connection as any,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 2000 },
+        removeOnComplete: { count: 1000 },
+        removeOnFail: { count: 5000 },
+      },
+    });
+  }
+  return _queue;
+}
 
-export const executionQueue = new Queue<ExecutionJobPayload>(QUEUE_NAMES.EXECUTION, {
-  connection: connection as any,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: { type: "exponential", delay: 2000 },
-    removeOnComplete: { count: 1000 },
-    removeOnFail: { count: 5000 },
+export const executionQueue = new Proxy({} as Queue<ExecutionJobPayload>, {
+  get(_, prop) {
+    return (getQueue() as unknown as Record<string, unknown>)[prop as string];
   },
 });
 

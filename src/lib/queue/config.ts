@@ -1,5 +1,6 @@
 /**
  * Redis connection for BullMQ. Shared by API (producer) and worker (consumer).
+ * Connection is lazy so Next.js build (no Redis available) does not try to connect.
  */
 
 import IORedis from "ioredis";
