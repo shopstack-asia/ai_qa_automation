@@ -31,6 +31,7 @@ export async function GET(req: NextRequest) {
       select: {
         id: true,
         status: true,
+        executionMetadata: true,
         videoUrl: true,
         screenshotUrls: true,
         finishedAt: true,
@@ -49,18 +50,22 @@ export async function GET(req: NextRequest) {
   const totalPages = Math.ceil(total / limit) || 1;
 
   return NextResponse.json({
-    data: list.map((e) => ({
-      id: e.id,
-      status: e.status,
-      videoUrl: e.videoUrl,
-      screenshotCount: Array.isArray(e.screenshotUrls) ? e.screenshotUrls.length : 0,
-      finishedAt: e.finishedAt,
-      duration: e.duration,
-      testCaseId: e.testCaseId,
-      testCaseTitle: e.testCase?.title ?? null,
-      projectId: e.project?.id ?? null,
-      projectName: e.project?.name ?? null,
-    })),
+    data: list.map((e) => {
+      const meta = e.executionMetadata as { execution_status?: string } | null;
+      return {
+        id: e.id,
+        status: e.status,
+        execution_status: meta?.execution_status ?? e.status,
+        videoUrl: e.videoUrl,
+        screenshotCount: Array.isArray(e.screenshotUrls) ? e.screenshotUrls.length : 0,
+        finishedAt: e.finishedAt,
+        duration: e.duration,
+        testCaseId: e.testCaseId,
+        testCaseTitle: e.testCase?.title ?? null,
+        projectId: e.project?.id ?? null,
+        projectName: e.project?.name ?? null,
+      };
+    }),
     total,
     page,
     limit,

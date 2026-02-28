@@ -208,12 +208,23 @@ export interface RunStep {
   assertion?: string;
 }
 
+/** Failure classification for each step. DATA_NOT_VERIFIED when assertion fails on unverified AI-simulated data. */
+export type StepFailureType =
+  | "ASSERTION_FAILED"
+  | "SELECTOR_NOT_FOUND"
+  | "ACTION_EXECUTION_ERROR"
+  | "DATA_NOT_VERIFIED";
+
 export interface StepLogEntry {
   order: number;
   action: string;
   passed: boolean;
   durationMs: number;
   error?: string;
+  /** Classification of failure; null when passed or when not classified. */
+  failure_type?: StepFailureType | null;
+  /** Error message when step failed (same as error; exposed for API). */
+  error_message?: string | null;
   screenshotUrl?: string;
 }
 
@@ -238,17 +249,41 @@ export interface RunFromAgentExecutionOptions {
   applicationId?: string;
   /** Execution-scoped selector cache (success + failure) to avoid repeated DB/AI calls */
   executionSelectorCache?: ExecutionSelectorCache;
+  /** Optional test data source/verification. When source=AI_SIMULATION and verified=false and previously_passed≠true, assertion failures become DATA_NOT_VERIFIED. */
+  testDataMeta?: TestDataMeta;
+}
+
+/** Test data source and verification state. UNVERIFIED when source=AI_SIMULATION and verified=false and previously_passed≠true. */
+export interface TestDataMeta {
+  source?: "AI_SIMULATION" | "FIXED" | "USER_INPUT";
+  verified?: boolean;
+  previously_passed?: boolean;
 }
 
 export interface ExecutionMetadata {
   base_url: string;
+  /** Test data snapshot + source/verification metadata. source/verified/previously_passed drive DATA_NOT_VERIFIED classification. */
   test_data: {
     username?: string;
     password?: string;
     search_keyword?: string;
-    [key: string]: string | undefined;
+    /** Data source: AI-simulated, fixed, or user-provided. Default FIXED for backward compat. */
+    source?: "AI_SIMULATION" | "FIXED" | "USER_INPUT";
+    /** Whether this data has been verified (e.g. by a prior pass). Default true. */
+    verified?: boolean;
+    /** Whether a previous run with this data passed. */
+    previously_passed?: boolean;
+    [key: string]: string | undefined | boolean | "AI_SIMULATION" | "FIXED" | "USER_INPUT" | undefined;
   };
 }
+
+/** Aggregate execution status. FAILED_UNVERIFIED_DATA = assertion failed on unverified AI data; bug creation only for FAILED_BUSINESS. */
+export type ExecutionStatusType =
+  | "PASSED"
+  | "FAILED_BUSINESS"
+  | "FAILED_UNVERIFIED_DATA"
+  | "FAILED_SELECTOR"
+  | "FAILED";
 
 export interface RunResult {
   passed: boolean;
@@ -260,6 +295,8 @@ export interface RunResult {
   errorMessage?: string;
   executionMetadata?: ExecutionMetadata;
   readableSteps?: string[];
+  /** Classified status for bug creation: only FAILED_BUSINESS should trigger bug creation. */
+  execution_status?: ExecutionStatusType;
 }
 
 /** Replace <PLACEHOLDER> with variables["PLACEHOLDER"]. Unknown placeholders left as-is. */
@@ -326,6 +363,7 @@ function semanticKeyToDescription(semanticKey: string): string {
 function isSelectorRelatedError(message: string): boolean {
   const m = message.toLowerCase();
   return (
+    m === "pending_runtime" ||
     m.includes("timeout") ||
     m.includes("not found") ||
     m.includes("strict mode") ||
@@ -333,6 +371,24 @@ function isSelectorRelatedError(message: string): boolean {
     m.includes("waiting for selector") ||
     m.includes("no element")
   );
+}
+
+/** True if the error is a business/assertion failure (expected value mismatch, not selector or action). */
+function isAssertionError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("expected text") ||
+    m.includes("expected url") ||
+    m.includes("expected to contain") ||
+    m.includes("expected value")
+  );
+}
+
+/** Classify caught error into StepFailureType for step log. */
+function classifyStepFailure(errorMessage: string): StepFailureType {
+  if (isSelectorRelatedError(errorMessage)) return "SELECTOR_NOT_FOUND";
+  if (isAssertionError(errorMessage)) return "ASSERTION_FAILED";
+  return "ACTION_EXECUTION_ERROR";
 }
 
 /** Actions that use a single element selector and can be retried with an AI-suggested selector. */
@@ -360,6 +416,7 @@ export async function runPlaywrightExecutionFromAgentExecution(
     projectId,
     applicationId,
     executionSelectorCache = new Map() as ExecutionSelectorCache,
+    testDataMeta,
   } = options;
   const stepLog: StepLogEntry[] = [];
   const screenshotUrls: string[] = [];
@@ -368,14 +425,25 @@ export async function runPlaywrightExecutionFromAgentExecution(
   let passed = true;
   let lastError: string | undefined;
 
+  // Test data snapshot + source/verification metadata. Defaults avoid DATA_NOT_VERIFIED for existing flows.
+  const test_data: ExecutionMetadata["test_data"] = {
+    username: credentials?.username,
+    password: credentials?.password ? "****" : undefined,
+    ...(Object.keys(variables).length ? variables : {}),
+    source: testDataMeta?.source ?? "FIXED",
+    verified: testDataMeta?.verified ?? true,
+    previously_passed: testDataMeta?.previously_passed ?? false,
+  };
   const executionMetadata: ExecutionMetadata = {
     base_url: baseUrl,
-    test_data: {
-      username: credentials?.username,
-      password: credentials?.password ? "****" : undefined,
-      ...(Object.keys(variables).length ? variables : {}),
-    },
+    test_data,
   };
+
+  /** Data is UNVERIFIED when AI-simulated, not verified, and not previously passed. Drives DATA_NOT_VERIFIED / FAILED_UNVERIFIED_DATA. */
+  const isUnverifiedData =
+    test_data.source === "AI_SIMULATION" &&
+    test_data.verified === false &&
+    test_data.previously_passed !== true;
 
   const videoDir = path.join(process.cwd(), "test-results", "videos", executionId);
   try {
@@ -422,6 +490,8 @@ export async function runPlaywrightExecutionFromAgentExecution(
       const stepStart = Date.now();
       let stepPassed = true;
       let stepError: string | undefined;
+      /** Classification: set when step fails (assertion vs selector vs action). */
+      let stepFailureType: StepFailureType | undefined;
       let selector = step.resolved_selector;
       let loc = getLocatorFromStoredSelector(page, selector);
       let label = getLabelFromSelector(selector);
@@ -453,6 +523,7 @@ export async function runPlaywrightExecutionFromAgentExecution(
           stepPassed = false;
           stepError =
             "Exact accessible name mismatch; selector did not match visible button text.";
+          stepFailureType = "SELECTOR_NOT_FOUND";
         }
       }
 
@@ -619,6 +690,7 @@ export async function runPlaywrightExecutionFromAgentExecution(
               if (!text?.includes(expected)) {
                 stepPassed = false;
                 stepError = `Expected text containing "${expected}", got: ${text?.slice(0, 100)}`;
+                stepFailureType = "ASSERTION_FAILED";
               }
             }
             if (stepPassed) readableSteps.push(`Verify text contains "${expected}"`);
@@ -630,6 +702,7 @@ export async function runPlaywrightExecutionFromAgentExecution(
             if (expected && !url.includes(expected)) {
               stepPassed = false;
               stepError = `Expected URL containing "${expected}", got: ${url}`;
+              stepFailureType = "ASSERTION_FAILED";
             }
             if (stepPassed) readableSteps.push(`Verify URL contains "${expected}"`);
             break;
@@ -679,6 +752,7 @@ export async function runPlaywrightExecutionFromAgentExecution(
               if (ass.value != null && !page.url().includes(String(ass.value))) {
                 stepPassed = false;
                 stepError = `Expected URL containing "${ass.value}", got: ${page.url()}`;
+                stepFailureType = "ASSERTION_FAILED";
               }
               break;
             case "text_contains":
@@ -687,6 +761,7 @@ export async function runPlaywrightExecutionFromAgentExecution(
                 if (!text?.includes(String(ass.value))) {
                   stepPassed = false;
                   stepError = `Expected text containing "${ass.value}", got: ${text?.slice(0, 100)}`;
+                  stepFailureType = "ASSERTION_FAILED";
                 }
               }
               break;
@@ -724,6 +799,15 @@ export async function runPlaywrightExecutionFromAgentExecution(
         }
       };
       try {
+        // PENDING_RUNTIME: no selector from pre-exec — go directly to fallback (AI with DOM)
+        if (
+          !selector &&
+          SELECTOR_FALLBACK_ACTIONS.has(step.action) &&
+          projectId &&
+          applicationId
+        ) {
+          throw new Error("PENDING_RUNTIME");
+        }
         if (!clickValidationFailed) {
           await doStep();
           // PART 6: Auto-save to knowledge when resolved by AI and validation passed
@@ -884,22 +968,31 @@ export async function runPlaywrightExecutionFromAgentExecution(
           } catch (_) {
             stepPassed = false;
             stepError = errMsg;
+            stepFailureType = classifyStepFailure(errMsg);
             lastError = stepError;
           }
         } else {
           stepPassed = false;
           stepError = errMsg;
+          stepFailureType = classifyStepFailure(errMsg);
           lastError = stepError;
         }
       }
 
       passed = passed && stepPassed;
+      // When assertion failed on unverified AI data, classify as DATA_NOT_VERIFIED (execution_status will be FAILED_UNVERIFIED_DATA).
+      const effectiveFailureType =
+        stepFailureType === "ASSERTION_FAILED" && isUnverifiedData
+          ? "DATA_NOT_VERIFIED"
+          : stepFailureType ?? null;
       stepLog.push({
         order: step.stepIndex,
         action: step.action,
         passed: stepPassed,
         durationMs: Date.now() - stepStart,
         error: stepError,
+        failure_type: effectiveFailureType,
+        error_message: stepError ?? null,
         screenshotUrl: stepLog.length < screenshotUrls.length ? screenshotUrls[screenshotUrls.length - 1] : undefined,
       });
     }
@@ -924,6 +1017,26 @@ export async function runPlaywrightExecutionFromAgentExecution(
     }
   }
 
+  // Aggregate execution status: DATA_NOT_VERIFIED > ASSERTION_FAILED (business) > SELECTOR_NOT_FOUND > other failure > PASSED.
+  // Bug creation must only trigger when execution_status === "FAILED_BUSINESS" (never for FAILED_SELECTOR or FAILED_UNVERIFIED_DATA).
+  let execution_status: ExecutionStatusType = "PASSED";
+  const failedSteps = stepLog.filter((s) => !s.passed);
+  if (failedSteps.some((s) => s.failure_type === "DATA_NOT_VERIFIED")) {
+    execution_status = "FAILED_UNVERIFIED_DATA";
+  } else if (failedSteps.some((s) => s.failure_type === "ASSERTION_FAILED")) {
+    execution_status = "FAILED_BUSINESS";
+  } else if (failedSteps.some((s) => s.failure_type === "SELECTOR_NOT_FOUND")) {
+    execution_status = "FAILED_SELECTOR";
+  } else if (failedSteps.length > 0) {
+    execution_status = "FAILED";
+  }
+
+  // Optional auto promotion: when run passed with AI_SIMULATION data, mark verified and previously_passed for future runs.
+  if (execution_status === "PASSED" && test_data.source === "AI_SIMULATION") {
+    test_data.verified = true;
+    test_data.previously_passed = true;
+  }
+
   return {
     passed,
     duration,
@@ -934,6 +1047,7 @@ export async function runPlaywrightExecutionFromAgentExecution(
     errorMessage: lastError,
     executionMetadata,
     readableSteps: readableSteps.length ? readableSteps : undefined,
+    execution_status,
   };
 }
 

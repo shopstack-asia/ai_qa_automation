@@ -22,6 +22,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
+import { getExecutionDisplayStatus, executionStatusBadgeVariant } from "@/lib/execution-status";
 
 interface DashboardStats {
   totalProjects: number;
@@ -30,9 +31,12 @@ interface DashboardStats {
   executionRate: number;
   passed: number;
   failed: number;
+  /** Classified failure breakdown (from execution_status in metadata). */
+  failedBreakdown?: { business: number; unverifiedData: number; selector: number; other: number };
   recentExecutions: Array<{
     id: string;
     status: string;
+    executionMetadata?: { execution_status?: string } | null;
     duration: number | null;
     createdAt: string;
     testCase: { title: string };
@@ -54,23 +58,14 @@ const EMPTY_STATS: DashboardStats = {
   health: { db: "", redis: "" },
 };
 
+/** Uses classified execution_status when available (from executionMetadata). */
 function statusVariant(
-  status: string
-): "success" | "destructive" | "running" | "queued" | "default" {
-  switch (status) {
-    case "PASSED":
-      return "success";
-    case "FAILED":
-      return "destructive";
-    case "RUNNING":
-      return "running";
-    case "QUEUED":
-      return "queued";
-    case "IGNORE":
-      return "default";
-    default:
-      return "default";
-  }
+  status: string,
+  executionStatus?: string | null
+): "success" | "destructive" | "warning" | "running" | "queued" | "default" {
+  return executionStatusBadgeVariant(
+    getExecutionDisplayStatus(status, executionStatus)
+  );
 }
 
 export default function DashboardPage() {
@@ -107,6 +102,20 @@ export default function DashboardPage() {
       const totalExecutions = executions.length;
       const passed = executions.filter((e: { status: string }) => e.status === "PASSED").length;
       const failed = executions.filter((e: { status: string }) => e.status === "FAILED").length;
+      const failedExecutions = executions.filter(
+        (e: { status: string; executionMetadata?: { execution_status?: string } | null }) =>
+          e.status === "FAILED"
+      ) as Array<{ executionMetadata?: { execution_status?: string } | null }>;
+      const failedBreakdown = {
+        business: failedExecutions.filter((e) => e.executionMetadata?.execution_status === "FAILED_BUSINESS").length,
+        unverifiedData: failedExecutions.filter((e) => e.executionMetadata?.execution_status === "FAILED_UNVERIFIED_DATA").length,
+        selector: failedExecutions.filter((e) => e.executionMetadata?.execution_status === "FAILED_SELECTOR").length,
+        other: failedExecutions.filter(
+          (e) =>
+            !e.executionMetadata?.execution_status ||
+            e.executionMetadata.execution_status === "FAILED"
+        ).length,
+      };
       const executionRate =
         totalTestCases > 0 ? Math.round((totalExecutions / totalTestCases) * 100) : 0;
 
@@ -139,6 +148,7 @@ export default function DashboardPage() {
         executionRate,
         passed,
         failed,
+        failedBreakdown: failed > 0 ? failedBreakdown : undefined,
         recentExecutions: executions,
         trend: trend.length ? trend : [{ date: "—", passed: 0, failed: 0 }],
         health,
@@ -151,7 +161,15 @@ export default function DashboardPage() {
     { label: "Test Cases", value: stats.totalTestCases },
     { label: "Execution Rate", value: `${stats.executionRate}%` },
     { label: "Passed", value: stats.passed, highlight: "success" as const },
-    { label: "Failed", value: stats.failed, highlight: "destructive" as const },
+    {
+      label: "Failed",
+      value: stats.failed,
+      highlight: "destructive" as const,
+      subtitle:
+        stats.failedBreakdown && stats.failed > 0
+          ? `Business: ${stats.failedBreakdown.business} · Unverified data: ${stats.failedBreakdown.unverifiedData} · Selector: ${stats.failedBreakdown.selector} · Other: ${stats.failedBreakdown.other}`
+          : undefined,
+    },
   ];
 
   return (
@@ -184,6 +202,9 @@ export default function DashboardPage() {
                 k.value
               )}
             </p>
+            {"subtitle" in k && k.subtitle && (
+              <p className="mt-0.5 text-xs text-muted-foreground">{k.subtitle}</p>
+            )}
           </Card>
         ))}
       </section>
@@ -328,7 +349,17 @@ export default function DashboardPage() {
                       {e.environment?.name ?? "—"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={statusVariant(e.status)}>{e.status}</Badge>
+                      <Badge
+                        variant={statusVariant(
+                          e.status,
+                          e.executionMetadata?.execution_status
+                        )}
+                      >
+                        {getExecutionDisplayStatus(
+                          e.status,
+                          e.executionMetadata?.execution_status
+                        )}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       {e.duration != null ? `${e.duration}ms` : "—"}

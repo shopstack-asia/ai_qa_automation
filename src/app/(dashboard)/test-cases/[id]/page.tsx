@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
+import { getExecutionDisplayStatus, executionStatusBadgeVariant } from "@/lib/execution-status";
 
 interface StepDef {
   order: number;
@@ -36,6 +37,7 @@ interface TestCaseDetail {
   latestExecution: {
     id: string;
     status: string;
+    execution_status?: string;
     stepLog: StepLogEntry[] | null;
     createdAt: string;
   } | null;
@@ -155,17 +157,11 @@ export default function TestCaseDetailPage() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Result</span>
                   <Badge
-                    variant={
-                      tc.latestExecution.status === "PASSED"
-                        ? "success"
-                        : tc.latestExecution.status === "FAILED"
-                          ? "destructive"
-                          : tc.latestExecution.status === "IGNORE"
-                            ? "queued"
-                            : "default"
-                    }
+                    variant={executionStatusBadgeVariant(
+                      getExecutionDisplayStatus(tc.latestExecution.status, tc.latestExecution.execution_status)
+                    )}
                   >
-                    {tc.latestExecution.status}
+                    {getExecutionDisplayStatus(tc.latestExecution.status, tc.latestExecution.execution_status)}
                   </Badge>
                 </div>
                 <Button variant="secondary" size="sm" asChild>

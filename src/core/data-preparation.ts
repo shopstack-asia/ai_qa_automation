@@ -124,7 +124,7 @@ Return JSON: { "value": { ... } }`;
     throw new Error("AI response must contain 'value' key");
   }
 
-  // Save to data_knowledge
+  // Save to data_knowledge with source=AI_SIMULATION, unverified (can yield DATA_NOT_VERIFIED / FAILED_UNVERIFIED_DATA until verified).
   await prisma.dataKnowledge.create({
     data: {
       projectId,
@@ -133,6 +133,9 @@ Return JSON: { "value": { ... } }`;
       scenario: requirement.scenario,
       role: requirement.role ?? null,
       value: parsed.value as object,
+      source: "AI_SIMULATION",
+      verified: false,
+      previouslyPassed: false,
     },
   });
 

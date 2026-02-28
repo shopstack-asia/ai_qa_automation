@@ -35,6 +35,13 @@ export async function PATCH(
   if (p.scenario !== undefined) data.scenario = p.scenario;
   if (p.role !== undefined) data.role = p.role;
   if (p.value !== undefined) data.value = p.value;
+  if (p.verified !== undefined) data.verified = p.verified;
+  if (p.previously_passed !== undefined) data.previouslyPassed = p.previously_passed;
+
+  // AI-created + user edits Value → auto-change source to FIXED (Source is system-determined, not user-editable)
+  if (p.value !== undefined && existing.source === "AI_SIMULATION") {
+    data.source = "FIXED";
+  }
 
   const row = await prisma.dataKnowledge.update({
     where: { id: dkId },

@@ -34,6 +34,7 @@ export async function GET(
     select: {
       id: true,
       status: true,
+      executionMetadata: true,
       createdAt: true,
       startedAt: true,
       finishedAt: true,
@@ -45,15 +46,19 @@ export async function GET(
 
   return NextResponse.json({
     ...run,
-    executions: executions.map((e) => ({
-      id: e.id,
-      status: e.status,
-      createdAt: e.createdAt,
-      startedAt: e.startedAt,
-      finishedAt: e.finishedAt,
-      duration: e.duration,
-      testCaseId: e.testCaseId,
-      testCaseTitle: e.testCase?.title ?? "",
-    })),
+    executions: executions.map((e) => {
+      const meta = e.executionMetadata as { execution_status?: string } | null;
+      return {
+        id: e.id,
+        status: e.status,
+        execution_status: meta?.execution_status ?? e.status,
+        createdAt: e.createdAt,
+        startedAt: e.startedAt,
+        finishedAt: e.finishedAt,
+        duration: e.duration,
+        testCaseId: e.testCaseId,
+        testCaseTitle: e.testCase?.title ?? "",
+      };
+    }),
   });
 }

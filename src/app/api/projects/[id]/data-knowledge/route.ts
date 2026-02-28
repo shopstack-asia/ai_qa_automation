@@ -95,6 +95,7 @@ export async function POST(
   }
 
   const p = parsed.data;
+  // User creates via UI → source = USER_INPUT (AI creates via data-preparation → AI_SIMULATION)
   const row = await prisma.dataKnowledge.create({
     data: {
       projectId,
@@ -103,6 +104,9 @@ export async function POST(
       scenario: p.scenario,
       role: p.role ?? null,
       value: p.value,
+      source: "USER_INPUT",
+      verified: p.verified ?? true,
+      previouslyPassed: p.previously_passed ?? false,
     },
   });
 

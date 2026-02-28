@@ -14,10 +14,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { getExecutionDisplayStatus, executionStatusBadgeVariant } from "@/lib/execution-status";
 
 interface S3LogRow {
   id: string;
   status: string;
+  execution_status?: string;
   videoUrl: string | null;
   screenshotCount: number;
   finishedAt: string | null;
@@ -103,17 +105,11 @@ export default function S3LogsPage() {
                       <TableCell className="text-muted-foreground text-sm">{row.projectName ?? "—"}</TableCell>
                       <TableCell>
                         <Badge
-                          variant={
-                            row.status === "PASSED"
-                              ? "success"
-                              : row.status === "FAILED"
-                                ? "destructive"
-                                : row.status === "IGNORE"
-                                  ? "queued"
-                                  : "default"
-                          }
+                          variant={executionStatusBadgeVariant(
+                            getExecutionDisplayStatus(row.status, row.execution_status)
+                          )}
                         >
-                          {row.status}
+                          {getExecutionDisplayStatus(row.status, row.execution_status)}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center text-muted-foreground text-sm">

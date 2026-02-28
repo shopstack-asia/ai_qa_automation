@@ -24,16 +24,26 @@ export async function GET(
       executions: {
         orderBy: { createdAt: "desc" },
         take: 1,
-        select: { id: true, status: true, stepLog: true, createdAt: true },
+        select: { id: true, status: true, executionMetadata: true, stepLog: true, createdAt: true },
       },
     },
   });
   if (!testCase) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const { executions, ...rest } = testCase;
+  const latest = executions?.[0];
+  const latestExecution = latest
+    ? {
+        id: latest.id,
+        status: latest.status,
+        execution_status: (latest.executionMetadata as { execution_status?: string } | null)?.execution_status ?? latest.status,
+        stepLog: latest.stepLog,
+        createdAt: latest.createdAt,
+      }
+    : null;
   return NextResponse.json({
     ...rest,
     dataRequirement: rest.dataRequirement ?? [],
-    latestExecution: executions?.[0] ?? null,
+    latestExecution,
   });
 }
 

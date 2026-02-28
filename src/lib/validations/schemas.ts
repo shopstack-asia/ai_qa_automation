@@ -269,6 +269,8 @@ export const createDataKnowledgeSchema = z.object({
     ),
     z.record(z.unknown()),
   ]).transform((v) => (typeof v === "string" ? (JSON.parse(v) as object) : v)),
+  verified: z.boolean().optional().nullable(),
+  previously_passed: z.boolean().optional().nullable(),
 });
 
 export const updateDataKnowledgeSchema = z.object({
@@ -299,6 +301,8 @@ export const updateDataKnowledgeSchema = z.object({
     ])
     .transform((v) => (typeof v === "string" ? (JSON.parse(v) as object) : v))
     .optional(),
+  verified: z.boolean().optional().nullable(),
+  previously_passed: z.boolean().optional().nullable(),
 });
 
 // ----- System config -----

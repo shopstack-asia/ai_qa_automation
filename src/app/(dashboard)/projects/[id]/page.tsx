@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/table";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Download, GripVertical, History, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
 import { VideoPreview } from "@/components/executions/video-preview";
+import { getExecutionDisplayStatus, executionStatusBadgeVariant } from "@/lib/execution-status";
 
 interface ProjectDetail {
   id: string;
@@ -330,10 +331,10 @@ export default function ProjectDetailPage() {
     duration: number | null;
     videoUrl: string | null;
     screenshotUrls: string[] | null;
-    stepLog: Array<{ order: number; action: string; passed: boolean; error?: string; screenshotUrl?: string }> | null;
+    stepLog: Array<{ order: number; action: string; passed: boolean; error?: string; failure_type?: string | null; error_message?: string | null; screenshotUrl?: string }> | null;
     resultSummary: string | null;
     errorMessage: string | null;
-    executionMetadata?: { base_url?: string; test_data?: Record<string, string | undefined> } | null;
+    executionMetadata?: { base_url?: string; test_data?: Record<string, string | undefined>; execution_status?: string } | null;
     readableSteps?: string[] | null;
     startedAt: string | null;
     finishedAt: string | null;
@@ -358,7 +359,7 @@ export default function ProjectDetailPage() {
     status: string;
     startedAt: string;
     completedAt: string | null;
-    executions: { id: string; status: string; createdAt?: string; startedAt: string | null; finishedAt: string | null; duration: number | null; testCaseId: string; testCaseTitle: string }[];
+    executions: { id: string; status: string; execution_status?: string; createdAt?: string; startedAt: string | null; finishedAt: string | null; duration: number | null; testCaseId: string; testCaseTitle: string }[];
   } | null>(null);
   const [runDetailPage, setRunDetailPage] = useState(1);
   const runDetailLimit = 10;
@@ -558,6 +559,9 @@ export default function ProjectDetailPage() {
     scenario: string;
     role: string | null;
     value: unknown;
+    source: string | null;
+    verified: boolean | null;
+    previouslyPassed: boolean | null;
     updatedAt: string;
   }[]>([]);
   const [dataKnowledgeLoading, setDataKnowledgeLoading] = useState(false);
@@ -571,7 +575,16 @@ export default function ProjectDetailPage() {
   const [dkSortOrder, setDkSortOrder] = useState<"asc" | "desc">("desc");
   const [dkDrawerOpen, setDkDrawerOpen] = useState(false);
   const [dkEditingId, setDkEditingId] = useState<string | null>(null);
-  const [dkForm, setDkForm] = useState({ key: "", type: "", scenario: "", role: "", value: "{}" });
+  const [dkForm, setDkForm] = useState({
+    key: "",
+    type: "",
+    scenario: "",
+    role: "",
+    value: "{}",
+    source: "FIXED" as "AI_SIMULATION" | "FIXED" | "USER_INPUT",
+    verified: true,
+    previously_passed: false,
+  });
   const [dkFormError, setDkFormError] = useState("");
   const [dkSubmitting, setDkSubmitting] = useState(false);
   const [dkConfirmDeleteId, setDkConfirmDeleteId] = useState<string | null>(null);
@@ -685,10 +698,13 @@ export default function ProjectDetailPage() {
         scenario: row.scenario,
         role: row.role ?? "",
         value: typeof row.value === "object" ? JSON.stringify(row.value, null, 2) : String(row.value ?? "{}"),
+        source: (row.source === "AI_SIMULATION" || row.source === "USER_INPUT" ? row.source : "FIXED") as "AI_SIMULATION" | "FIXED" | "USER_INPUT",
+        verified: row.verified ?? false,
+        previously_passed: row.previouslyPassed ?? false,
       });
     } else {
       setDkEditingId(null);
-      setDkForm({ key: "", type: "", scenario: "", role: "", value: "{}" });
+      setDkForm({ key: "", type: "", scenario: "", role: "", value: "{}", source: "FIXED", verified: true, previously_passed: false });
     }
     setDkFormError("");
     setDkDrawerOpen(true);
@@ -696,7 +712,7 @@ export default function ProjectDetailPage() {
   const closeDkModal = () => {
     setDkDrawerOpen(false);
     setDkEditingId(null);
-    setDkForm({ key: "", type: "", scenario: "", role: "", value: "{}" });
+    setDkForm({ key: "", type: "", scenario: "", role: "", value: "{}", source: "FIXED", verified: true, previously_passed: false });
     setDkFormError("");
   };
   const submitDkForm = async (e?: React.FormEvent) => {
@@ -733,7 +749,7 @@ export default function ProjectDetailPage() {
         const res = await fetch(`/api/projects/${id}/data-knowledge/${dkEditingId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key, type, scenario, role, value: valueObj }),
+          body: JSON.stringify({ key, type, scenario, role, value: valueObj, verified: dkForm.verified, previously_passed: dkForm.previously_passed }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -747,7 +763,7 @@ export default function ProjectDetailPage() {
         const res = await fetch(`/api/projects/${id}/data-knowledge`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key, type, scenario, role, value: valueObj }),
+          body: JSON.stringify({ key, type, scenario, role, value: valueObj, verified: dkForm.verified, previously_passed: dkForm.previously_passed }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
@@ -3189,7 +3205,7 @@ export default function ProjectDetailPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
                 <CardTitle>Data Knowledge</CardTitle>
-                <CardDescription>Structured test input storage used by the resolver layer. Key + type + scenario + role identify entries.</CardDescription>
+                <CardDescription>Structured test input storage used by the resolver layer. Key + type + scenario + role identify entries. Source (FIXED / AI_SIMULATION / USER_INPUT), Verified, and Previously passed drive failure classification (e.g. FAILED_UNVERIFIED_DATA when assertion fails on unverified AI data).</CardDescription>
               </div>
               {userRole !== "qa" && (
                 <Button size="sm" onClick={() => openDkModal()}>
@@ -3287,6 +3303,9 @@ export default function ProjectDetailPage() {
                           {dkSortBy === "role" && (dkSortOrder === "asc" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />)}
                         </button>
                       </TableHead>
+                      <TableHead className="min-w-[100px] text-muted-foreground font-normal">Source</TableHead>
+                      <TableHead className="min-w-[80px] text-muted-foreground font-normal">Verified</TableHead>
+                      <TableHead className="min-w-[80px] text-muted-foreground font-normal">Previously passed</TableHead>
                       <TableHead className="whitespace-nowrap w-36">
                         <button type="button" onClick={() => handleDkSort("updatedAt")} className="flex items-center gap-1 font-medium hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent rounded">
                           Updated At
@@ -3299,13 +3318,13 @@ export default function ProjectDetailPage() {
                   <TableBody>
                     {dataKnowledgeLoading ? (
                       <TableRow>
-                        <TableCell colSpan={userRole !== "qa" ? 6 : 5} className="py-8 text-center text-sm text-muted-foreground">
+                        <TableCell colSpan={userRole !== "qa" ? 9 : 8} className="py-8 text-center text-sm text-muted-foreground">
                           Loading…
                         </TableCell>
                       </TableRow>
                     ) : dataKnowledge.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={userRole !== "qa" ? 6 : 5} className="py-8 text-center text-sm text-muted-foreground">
+                        <TableCell colSpan={userRole !== "qa" ? 9 : 8} className="py-8 text-center text-sm text-muted-foreground">
                           No data knowledge yet. Add data above.
                         </TableCell>
                       </TableRow>
@@ -3316,6 +3335,17 @@ export default function ProjectDetailPage() {
                           <TableCell className="min-w-[120px] font-mono text-sm align-top">{row.type}</TableCell>
                           <TableCell className="min-w-[120px] font-mono text-sm align-top">{row.scenario}</TableCell>
                           <TableCell className="min-w-[100px] font-mono text-sm align-top">{row.role ?? "—"}</TableCell>
+                          <TableCell className="min-w-[100px] text-sm align-top">
+                            <span className={row.source === "AI_SIMULATION" ? "text-warning" : row.source === "USER_INPUT" ? "text-muted-foreground" : ""}>
+                              {row.source ?? "FIXED"}
+                            </span>
+                          </TableCell>
+                          <TableCell className="min-w-[80px] text-sm align-top">
+                            {row.verified === true ? "Yes" : "No"}
+                          </TableCell>
+                          <TableCell className="min-w-[80px] text-sm align-top">
+                            {row.previouslyPassed === true ? "Yes" : "No"}
+                          </TableCell>
                           <TableCell className="whitespace-nowrap text-muted-foreground text-sm align-top">
                             {row.updatedAt ? new Date(row.updatedAt).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" }) : "—"}
                           </TableCell>
@@ -3601,7 +3631,7 @@ export default function ProjectDetailPage() {
                                   >
                                     {title}
                                   </span>
-                                  <Badge variant={e.status === "PASSED" ? "success" : e.status === "FAILED" ? "destructive" : e.status === "IGNORE" ? "queued" : "default"} className="text-xs shrink-0 ml-auto">{e.status}</Badge>
+                                  <Badge variant={executionStatusBadgeVariant(getExecutionDisplayStatus(e.status, e.execution_status))} className="text-xs shrink-0 ml-auto">{getExecutionDisplayStatus(e.status, e.execution_status)}</Badge>
                                 </div>
                                 <p className="mt-1.5 text-xs text-muted-foreground">
                                   Execution time: {startStr} – {endStr} ({durationStr})
@@ -3873,6 +3903,35 @@ export default function ProjectDetailPage() {
                     onChange={(e) => setDkForm((p) => ({ ...p, role: e.target.value }))}
                     placeholder="e.g. ADMIN or leave empty"
                   />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-muted-foreground">Source</label>
+                  <div className="flex h-9 w-full items-center rounded-md border border-input bg-muted/50 px-3 py-1 text-sm text-muted-foreground">
+                    {dkEditingId ? (dkForm.source ?? "FIXED") : "USER_INPUT"}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Set by system: USER_INPUT (user add), AI_SIMULATION (AI), FIXED (AI-created then user edited Value).</p>
+                </div>
+                <div className="flex flex-wrap items-center gap-6">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="dk-verified"
+                      checked={dkForm.verified}
+                      onCheckedChange={(v) => setDkForm((p) => ({ ...p, verified: v }))}
+                    />
+                    <label htmlFor="dk-verified" className="text-sm font-medium text-muted-foreground shrink-0">
+                      {dkForm.verified ? "Verified" : "Not verified"}
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="dk-previously-passed"
+                      checked={dkForm.previously_passed}
+                      onCheckedChange={(v) => setDkForm((p) => ({ ...p, previously_passed: v }))}
+                    />
+                    <label htmlFor="dk-previously-passed" className="text-sm font-medium text-muted-foreground shrink-0">
+                      {dkForm.previously_passed ? "Previously passed" : "No previous passes"}
+                    </label>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-muted-foreground">Value <span className="text-destructive">*</span> (JSON)</label>
@@ -5348,7 +5407,7 @@ export default function ProjectDetailPage() {
                   <div className="rounded-lg border border-border bg-card p-4 space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Status</span>
-                      <Badge variant={tcHistoryExecution.status === "PASSED" ? "success" : tcHistoryExecution.status === "FAILED" ? "destructive" : tcHistoryExecution.status === "IGNORE" ? "queued" : "default"}>{tcHistoryExecution.status}</Badge>
+                      <Badge variant={executionStatusBadgeVariant(getExecutionDisplayStatus(tcHistoryExecution.status, tcHistoryExecution.executionMetadata?.execution_status))}>{getExecutionDisplayStatus(tcHistoryExecution.status, tcHistoryExecution.executionMetadata?.execution_status)}</Badge>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">Duration</span>
@@ -5420,7 +5479,18 @@ export default function ProjectDetailPage() {
                           <Badge variant={step.passed ? "success" : "destructive"} className="shrink-0">{step.order}</Badge>
                           <div className="min-w-0 flex-1">
                             <span className="font-medium text-foreground">{step.action}</span>
-                            {step.error && <span className="text-destructive block mt-0.5">{step.error}</span>}
+                            {(step.failure_type ?? step.error) && (
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {step.failure_type && (
+                                  <span className="inline-block rounded px-1.5 py-0.5 bg-muted/50 font-medium mr-1">
+                                    {step.failure_type.replace(/_/g, " ")}
+                                  </span>
+                                )}
+                                {(step.error_message ?? step.error) && (
+                                  <span className="text-destructive break-words">{step.error_message ?? step.error}</span>
+                                )}
+                              </p>
+                            )}
                             {"screenshotUrl" in step && step.screenshotUrl && (
                               <div className="mt-2 space-y-1">
                                 <a href={step.screenshotUrl as string} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline inline-flex items-center gap-1">View image</a>

@@ -3,7 +3,7 @@
  * NOT stored on TestCase.
  */
 
-export type ResolutionStatus = "RESOLVED" | "UNRESOLVED" | "BROKEN";
+export type ResolutionStatus = "RESOLVED" | "UNRESOLVED" | "BROKEN" | "PENDING_RUNTIME";
 
 export interface AgentExecutionAssertion {
   type: string;
@@ -11,7 +11,7 @@ export interface AgentExecutionAssertion {
   value: unknown;
 }
 
-export type ResolvedFrom = "strict" | "knowledge" | "ai";
+export type ResolvedFrom = "strict" | "knowledge" | "ai" | "ai_runtime";
 
 export interface AgentExecutionStep {
   stepIndex: number;

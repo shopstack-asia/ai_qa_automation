@@ -154,7 +154,15 @@ export async function processExecutionJob(payload: ExecutionJobPayload): Promise
       executionSelectorCache,
     });
 
+    // DB status remains PASSED | FAILED for backward compatibility.
     const executionStatus = result.passed ? "PASSED" : "FAILED";
+    // Expose classification in metadata so bug creation can gate on FAILED_BUSINESS only.
+    const executionMetadataPayload =
+      result.executionMetadata != null
+        ? { ...result.executionMetadata, execution_status: result.execution_status }
+        : result.execution_status != null
+          ? { execution_status: result.execution_status }
+          : null;
     await prisma.execution.update({
       where: { id: executionId },
       data: {
@@ -165,11 +173,12 @@ export async function processExecutionJob(payload: ExecutionJobPayload): Promise
         stepLog: result.stepLog?.length ? (result.stepLog as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
         resultSummary: result.resultSummary ?? null,
         errorMessage: result.errorMessage ?? null,
-        executionMetadata: result.executionMetadata != null ? (result.executionMetadata as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+        executionMetadata: executionMetadataPayload != null ? (executionMetadataPayload as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
         readableSteps: result.readableSteps != null ? (result.readableSteps as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
         finishedAt: new Date(),
       },
     });
+    // Bug creation must only trigger when execution_status === "FAILED_BUSINESS". Never for FAILED_SELECTOR, FAILED_UNVERIFIED_DATA, or FAILED.
     await prisma.testCase.update({
       where: { id: payload.testCaseId },
       data: { status: result.passed ? "PASSED" : "FAILED" },

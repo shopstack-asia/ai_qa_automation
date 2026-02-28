@@ -13,31 +13,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-function statusVariant(
-  status: string
-): "success" | "destructive" | "running" | "queued" | "default" {
-  switch (status) {
-    case "PASSED":
-      return "success";
-    case "FAILED":
-      return "destructive";
-    case "RUNNING":
-      return "running";
-    case "QUEUED":
-      return "queued";
-    case "IGNORE":
-      return "default";
-    default:
-      return "default";
-  }
-}
+import { getExecutionDisplayStatus, executionStatusBadgeVariant } from "@/lib/execution-status";
 
 export default function ExecutionsPage() {
   const [list, setList] = useState<
     Array<{
       id: string;
       status: string;
+      executionMetadata?: { execution_status?: string } | null;
       duration: number | null;
       createdAt: string;
       testCase: { title: string };
@@ -102,7 +85,19 @@ export default function ExecutionsPage() {
                       {e.environment?.name ?? "—"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={statusVariant(e.status)}>{e.status}</Badge>
+                      <Badge
+                        variant={executionStatusBadgeVariant(
+                          getExecutionDisplayStatus(
+                            e.status,
+                            e.executionMetadata?.execution_status
+                          )
+                        )}
+                      >
+                        {getExecutionDisplayStatus(
+                          e.status,
+                          e.executionMetadata?.execution_status
+                        )}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       {e.duration != null ? `${e.duration}ms` : "—"}

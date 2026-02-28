@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { VideoPreview } from "@/components/executions/video-preview";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { getExecutionDisplayStatus, executionStatusBadgeVariant, executionStatusLabel } from "@/lib/execution-status";
 
 interface ExecutionDetail {
   id: string;
@@ -21,6 +22,8 @@ interface ExecutionDetail {
     action: string;
     passed: boolean;
     error?: string;
+    failure_type?: string | null;
+    error_message?: string | null;
     screenshotUrl?: string;
   }> | null;
   resultSummary: string | null;
@@ -28,6 +31,7 @@ interface ExecutionDetail {
   executionMetadata?: {
     base_url?: string;
     test_data?: Record<string, string | undefined>;
+    execution_status?: string;
   } | null;
   readableSteps?: string[] | null;
   agentExecution?: unknown;
@@ -80,17 +84,14 @@ export default function ExecutionDetailPage() {
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Status</span>
               <Badge
-                variant={
-                  exec.status === "PASSED"
-                    ? "success"
-                    : exec.status === "FAILED"
-                      ? "destructive"
-                      : exec.status === "IGNORE"
-                        ? "queued"
-                        : "default"
-                }
+                variant={executionStatusBadgeVariant(
+                  getExecutionDisplayStatus(exec.status, exec.executionMetadata?.execution_status)
+                )}
+                title={executionStatusLabel(
+                  getExecutionDisplayStatus(exec.status, exec.executionMetadata?.execution_status)
+                )}
               >
-                {exec.status}
+                {getExecutionDisplayStatus(exec.status, exec.executionMetadata?.execution_status)}
               </Badge>
             </div>
             <div className="flex items-center justify-between">
@@ -200,8 +201,19 @@ export default function ExecutionDetailPage() {
                   </Badge>
                   <div className="min-w-0 flex-1">
                     <span className="font-medium text-foreground">{step.action}</span>
-                    {step.error && (
-                      <p className="mt-1 text-destructive text-xs break-words">{step.error}</p>
+                    {(step.failure_type ?? step.error) && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {step.failure_type && (
+                          <span className="inline-block rounded px-1.5 py-0.5 bg-muted/50 font-medium mr-1">
+                            {step.failure_type.replace(/_/g, " ")}
+                          </span>
+                        )}
+                        {(step.error_message ?? step.error) && (
+                          <span className="text-destructive break-words">
+                            {step.error_message ?? step.error}
+                          </span>
+                        )}
+                      </p>
                     )}
                     {"screenshotUrl" in step && step.screenshotUrl && (
                       <div className="mt-2 space-y-1">

@@ -1,6 +1,6 @@
 /**
  * Pre-Execution: data prep, selector prep, assertion mapping, persist agent_execution.
- * Runs BEFORE Playwright. May call AI only for selector resolution when no knowledge.
+ * Runs BEFORE Playwright. DB lookup only — NO AI. Unknown selectors become PENDING_RUNTIME.
  */
 
 import { prisma } from "@/lib/db/client";
@@ -8,7 +8,6 @@ import { DataOrchestrator } from "@/core/data-orchestrator";
 import type { ApplicationConfig, EnvConfig, TestCaseInput } from "@/core/data-orchestrator";
 import type { AgentExecution, AgentExecutionStep } from "@/lib/agent-execution-types";
 import { findSelector, incrementUsageCount } from "@/lib/selector/selector-knowledge-repository";
-import { resolveWithAI } from "@/lib/selector/selector-resolver-service";
 import { buildSemanticKey } from "@/lib/selector/semantic-key";
 import { isBodySelectorForFill } from "@/lib/selector/selector-validation";
 import { mapExpectedResultToAssertion } from "@/lib/assertion/assertion-mapper-service";
@@ -152,7 +151,7 @@ export async function runPreExecution(input: PreExecutionInput): Promise<PreExec
     variables = { ...variables, ...flat };
   }
 
-  // Step 2: Selector preparation (execution-scoped cache: success + failure, no repeated DB/AI)
+  // Step 2: Selector preparation — DB lookup only. No AI. Unknown → PENDING_RUNTIME (resolved at runtime with DOM).
   const executionSelectorCache: ExecutionSelectorCache = new Map();
   const existing = input.agentExecution ?? { steps: [] };
   const stepsByIndex = new Map<number, AgentExecutionStep>();
@@ -198,106 +197,48 @@ export async function runPreExecution(input: PreExecutionInput): Promise<PreExec
     }
 
     let resolved_selector: string | null = null;
-    let resolution_status: "RESOLVED" | "UNRESOLVED" | "BROKEN" = "UNRESOLVED";
-    let resolved_from: "strict" | "knowledge" | "ai" | undefined;
+    let resolution_status: "RESOLVED" | "UNRESOLVED" | "BROKEN" | "PENDING_RUNTIME" = "PENDING_RUNTIME";
+    let resolved_from: "strict" | "knowledge" | "ai" | "ai_runtime" | undefined;
     const cacheKey = `${appId}:${key}`;
 
-    try {
-      // Step A: Check execution cache FIRST (no DB, no AI)
-      const cached = executionSelectorCache.get(cacheKey);
-      if (cached) {
-        resolved_selector = cached.selector;
-        resolution_status = cached.status !== "NOT_FOUND" ? "RESOLVED" : "UNRESOLVED";
-        resolved_from = cached.status === "FOUND_IN_DB" ? "knowledge" : cached.status === "FOUND_IN_AI" ? "ai" : undefined;
-        if (process.env.NODE_ENV !== "test") {
-          console.info("[PreExecution]", {
-            semantic_key: key,
-            execution_cache_hit: true,
-            selector_knowledge_checked: false,
-            ai_called: false,
-            cache_status: cached.status,
-            stepIndex,
-          });
-        }
-      }
-
-      // Step B: Cache miss — try selector_knowledge DB, then AI
-      if (!cached) {
-        let selector_knowledge_checked = false;
-        let ai_called = false;
-        let cache_status: SelectorCacheEntry["status"] = "NOT_FOUND";
-
-        if (appId && projectId) {
-          selector_knowledge_checked = true;
-          const knowledge = await findSelector(projectId, appId, key);
-          if (knowledge?.selector) {
-            if (inferredAction === "fill" && isBodySelectorForFill(knowledge.selector, "fill")) {
-              if (process.env.NODE_ENV !== "test") {
-                console.warn("[PreExecution] Ignoring selector knowledge: css:body invalid for fill", {
-                  stepIndex,
-                  semantic_key: key,
-                });
-              }
-            } else {
-              resolved_selector = knowledge.selector;
-              resolution_status = "RESOLVED";
-              resolved_from = "knowledge";
-              cache_status = "FOUND_IN_DB";
-              executionSelectorCache.set(cacheKey, { status: "FOUND_IN_DB", selector: knowledge.selector });
-              await incrementUsageCount(projectId, appId, key);
-            }
-          }
-        }
-
-        if (!resolved_selector) {
-          try {
-            ai_called = true;
-        const result = await resolveWithAI(stepText, undefined, {
-          projectId: appId ? projectId : undefined,
-          applicationId: appId || undefined,
-          semanticKey: appId ? key : undefined,
-          skipKnowledgeLookup: true,
+    // Step A: Check execution cache (same semantic_key in multiple steps)
+    const cached = executionSelectorCache.get(cacheKey);
+    if (cached) {
+      resolved_selector = cached.selector;
+      resolution_status = cached.status !== "NOT_FOUND" ? "RESOLVED" : "UNRESOLVED";
+      resolved_from = cached.status === "FOUND_IN_DB" ? "knowledge" : cached.status === "FOUND_IN_AI" ? "ai" : undefined;
+      if (process.env.NODE_ENV !== "test") {
+        console.info("[PreExecution]", {
+          semantic_key: key,
+          execution_cache_hit: true,
+          cache_status: cached.status,
+          stepIndex,
         });
-            resolved_selector = result.storedSelector ?? null;
-            if (resolved_selector) {
-              cache_status = "FOUND_IN_AI";
-              resolution_status = "RESOLVED";
-              resolved_from = result.resolvedFrom ?? "ai";
-              executionSelectorCache.set(cacheKey, { status: "FOUND_IN_AI", selector: resolved_selector });
-            } else {
-              cache_status = "NOT_FOUND";
-              executionSelectorCache.set(cacheKey, { status: "NOT_FOUND", selector: null });
-            }
-          } catch (aiErr) {
-            cache_status = "NOT_FOUND";
-            executionSelectorCache.set(cacheKey, { status: "NOT_FOUND", selector: null });
-            if (process.env.NODE_ENV !== "test") {
-              console.info("[PreExecution]", {
-                semantic_key: key,
-                execution_cache_hit: false,
-                selector_knowledge_checked,
-                ai_called: true,
-                cache_status: "NOT_FOUND",
-                stepIndex,
-              });
-            }
-            throw aiErr;
-          }
-        }
+      }
+    }
 
-        if (process.env.NODE_ENV !== "test") {
-          console.info("[PreExecution]", {
-            semantic_key: key,
-            execution_cache_hit: false,
-            selector_knowledge_checked,
-            ai_called,
-            cache_status,
-            stepIndex,
-          });
+    // Step B: Cache miss — DB lookup only. No AI. Unknown → PENDING_RUNTIME (resolved at runtime).
+    if (!cached && appId && projectId) {
+      const knowledge = await findSelector(projectId, appId, key);
+      if (knowledge?.selector) {
+        if (inferredAction === "fill" && isBodySelectorForFill(knowledge.selector, "fill")) {
+          if (process.env.NODE_ENV !== "test") {
+            console.warn("[PreExecution] Ignoring selector knowledge: css:body invalid for fill", {
+              stepIndex,
+              semantic_key: key,
+            });
+          }
+          // Treat as PENDING_RUNTIME; runtime will resolve with DOM
+        } else {
+          resolved_selector = knowledge.selector;
+          resolution_status = "RESOLVED";
+          resolved_from = "knowledge";
+          executionSelectorCache.set(cacheKey, { status: "FOUND_IN_DB", selector: knowledge.selector });
+          await incrementUsageCount(projectId, appId, key);
         }
       }
-    } catch (err) {
-      console.warn("[PreExecution] resolveWithAI failed for step", stepIndex, err);
+      // If not found in DB: leave resolved_selector=null, resolution_status=PENDING_RUNTIME,
+      // resolved_from=null. Do NOT write NOT_FOUND to cache — runtime will resolve with AI+DOM.
     }
     const { action, resolved_selector: finalSelector } = resolveNavigateTarget(
       stepText,
