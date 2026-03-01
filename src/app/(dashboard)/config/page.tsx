@@ -630,7 +630,7 @@ export default function ConfigPage() {
                   <Button
                     type="button"
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => {
                       if (!googleRedirectUri) return;
                       navigator.clipboard.writeText(googleRedirectUri).then(() => {
