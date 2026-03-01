@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getConfig } from "@/lib/config";
+import { getRequestOrigin } from "@/lib/auth/request-origin";
 
 const isBuildTime = () => process.env.NEXT_PHASE === "phase-production-build";
 
@@ -19,7 +20,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Google OAuth not configured" }, { status: 400 });
   }
 
-  const redirectUri = new URL("/api/auth/google/callback", req.url).toString();
+  const origin = getRequestOrigin(req);
+  const redirectUri = new URL("/api/auth/google/callback", origin).toString();
   const scopes = ["openid", "https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"];
   
   const params = new URLSearchParams({

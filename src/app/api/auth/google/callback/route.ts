@@ -7,18 +7,20 @@ import { OAuth2Client } from "google-auth-library";
 import { prisma } from "@/lib/db/client";
 import { sign } from "@/lib/auth/jwt";
 import { sessionCookieName } from "@/lib/auth/session";
+import { getRequestOrigin } from "@/lib/auth/request-origin";
 import { getConfig } from "@/lib/config";
 
 export async function GET(req: NextRequest) {
+  const origin = getRequestOrigin(req);
   const code = req.nextUrl.searchParams.get("code");
   const error = req.nextUrl.searchParams.get("error");
 
   if (error) {
-    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error)}`, req.url));
+    return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error)}`, origin));
   }
 
   if (!code) {
-    return NextResponse.redirect(new URL("/login?error=missing_code", req.url));
+    return NextResponse.redirect(new URL("/login?error=missing_code", origin));
   }
 
   const config = await getConfig();
@@ -27,11 +29,11 @@ export async function GET(req: NextRequest) {
   const allowedDomain = config.google_allowed_domain;
 
   if (!clientId || !clientSecret) {
-    return NextResponse.redirect(new URL("/login?error=oauth_not_configured", req.url));
+    return NextResponse.redirect(new URL("/login?error=oauth_not_configured", origin));
   }
 
   try {
-    const redirectUri = new URL("/api/auth/google/callback", req.url).toString();
+    const redirectUri = new URL("/api/auth/google/callback", origin).toString();
     const oauth2Client = new OAuth2Client(clientId, clientSecret, redirectUri);
 
     // Exchange code for tokens
@@ -39,7 +41,7 @@ export async function GET(req: NextRequest) {
     oauth2Client.setCredentials(tokens);
 
     if (!tokens.id_token) {
-      return NextResponse.redirect(new URL("/login?error=no_id_token", req.url));
+      return NextResponse.redirect(new URL("/login?error=no_id_token", origin));
     }
 
     // Verify and decode the ID token
@@ -50,7 +52,7 @@ export async function GET(req: NextRequest) {
 
     const payload = ticket.getPayload();
     if (!payload || !payload.email) {
-      return NextResponse.redirect(new URL("/login?error=invalid_token", req.url));
+      return NextResponse.redirect(new URL("/login?error=invalid_token", origin));
     }
 
     const email = payload.email;
@@ -60,7 +62,7 @@ export async function GET(req: NextRequest) {
     // Check domain restriction if configured
     if (allowedDomain && emailDomain !== allowedDomain) {
       return NextResponse.redirect(
-        new URL(`/login?error=${encodeURIComponent(`Email domain must be @${allowedDomain}`)}`, req.url)
+        new URL(`/login?error=${encodeURIComponent(`Email domain must be @${allowedDomain}`)}`, origin)
       );
     }
 
@@ -89,7 +91,7 @@ export async function GET(req: NextRequest) {
 
       // Ensure user is active
       if (!user.isActive) {
-        return NextResponse.redirect(new URL("/login?error=account_disabled", req.url));
+        return NextResponse.redirect(new URL("/login?error=account_disabled", origin));
       }
     }
 
@@ -101,7 +103,7 @@ export async function GET(req: NextRequest) {
     });
 
     // Set session cookie and redirect to dashboard
-    const res = NextResponse.redirect(new URL("/", req.url));
+    const res = NextResponse.redirect(new URL("/", origin));
     const isHttps =
       req.nextUrl.protocol === "https:" ||
       req.headers.get("x-forwarded-proto") === "https";
@@ -117,7 +119,7 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     console.error("Google OAuth callback error:", err);
     return NextResponse.redirect(
-      new URL(`/login?error=${encodeURIComponent("Authentication failed")}`, req.url)
+      new URL(`/login?error=${encodeURIComponent("Authentication failed")}`, origin)
     );
   }
 }

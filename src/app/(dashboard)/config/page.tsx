@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import { X, Copy } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -216,6 +216,14 @@ export default function ConfigPage() {
   const [apiKeyError, setApiKeyError] = useState("");
   const [createdKeyOnce, setCreatedKeyOnce] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [googleRedirectUriCopied, setGoogleRedirectUriCopied] = useState(false);
+  const [googleRedirectUri, setGoogleRedirectUri] = useState("");
+
+  useEffect(() => {
+    setGoogleRedirectUri(
+      typeof window !== "undefined" ? `${window.location.origin}/api/auth/google/callback` : ""
+    );
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -608,6 +616,38 @@ export default function ConfigPage() {
                 </div>
               );
             })}
+            {section.title === "Google OAuth" && (
+              <div className="space-y-2 pt-1">
+                <label className="block text-sm font-medium text-muted-foreground">
+                  Redirect URI
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Input
+                    readOnly
+                    value={googleRedirectUri}
+                    className="max-w-xl font-mono text-sm"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (!googleRedirectUri) return;
+                      navigator.clipboard.writeText(googleRedirectUri).then(() => {
+                        setGoogleRedirectUriCopied(true);
+                        setTimeout(() => setGoogleRedirectUriCopied(false), 2000);
+                      });
+                    }}
+                  >
+                    <Copy className="h-4 w-4 mr-1.5" />
+                    {googleRedirectUriCopied ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Add this URL in Google Cloud Console → Credentials → OAuth 2.0 Client ID → Authorized redirect URIs
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       ))}
