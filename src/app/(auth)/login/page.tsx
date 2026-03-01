@@ -13,6 +13,21 @@ function LoginForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [allowManualLogin, setAllowManualLogin] = useState(true);
+  const [loginOptionsLoaded, setLoginOptionsLoaded] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/login-options")
+      .then((r) => (r.ok ? r.json() : { allowManualLogin: true }))
+      .then((data) => {
+        setAllowManualLogin(data.allowManualLogin ?? true);
+        setLoginOptionsLoaded(true);
+      })
+      .catch(() => {
+        setAllowManualLogin(true);
+        setLoginOptionsLoaded(true);
+      });
+  }, []);
 
   useEffect(() => {
     const urlError = searchParams.get("error");
@@ -70,119 +85,140 @@ function LoginForm() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="space-y-2">
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-slate-300"
-            >
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-              className="h-12 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-white placeholder:text-slate-500 transition-colors focus:border-blue-500/60 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-              placeholder="you@company.com"
-            />
-          </div>
-          <div className="space-y-2">
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-slate-300"
-            >
-              Password
-            </label>
-            <div className="relative">
-              <input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                className="h-12 w-full rounded-xl border border-white/10 bg-white/5 px-4 pr-12 text-white placeholder:text-slate-500 transition-colors focus:border-blue-500/60 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                placeholder="••••••••"
-              />
+        {!loginOptionsLoaded ? (
+          <div className="flex h-24 items-center justify-center text-slate-400">Loading…</div>
+        ) : (
+          <>
+            {allowManualLogin && (
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="email"
+                    className="block text-sm font-medium text-slate-300"
+                  >
+                    Email
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                    className="h-12 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-white placeholder:text-slate-500 transition-colors focus:border-blue-500/60 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                    placeholder="you@company.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label
+                    htmlFor="password"
+                    className="block text-sm font-medium text-slate-300"
+                  >
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      autoComplete="current-password"
+                      className="h-12 w-full rounded-xl border border-white/10 bg-white/5 px-4 pr-12 text-white placeholder:text-slate-500 transition-colors focus:border-blue-500/60 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      placeholder="••••••••"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((p) => !p)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      aria-label={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                      tabIndex={-1}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" aria-hidden />
+                      ) : (
+                        <Eye className="h-5 w-5" aria-hidden />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {error && (
+                  <p className="text-sm text-red-400" role="alert">
+                    {error}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading || googleLoading}
+                  className="flex h-12 w-full items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 font-medium text-white shadow-lg shadow-blue-500/25 transition-all hover:scale-[1.02] hover:shadow-blue-500/30 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
+                >
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <svg
+                        className="h-5 w-5 animate-spin text-white"
+                        viewBox="0 0 24 24"
+                        aria-hidden
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                          fill="none"
+                        />
+                        <path
+                          className="opacity-90"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      Signing in…
+                    </span>
+                  ) : (
+                    "Sign in"
+                  )}
+                </button>
+              </form>
+            )}
+
+            <div className={allowManualLogin ? "mt-6" : ""}>
+              {allowManualLogin && (
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-white/10"></div>
+                  </div>
+                  <div className="relative flex justify-center text-sm">
+                    <span className="bg-white/5 px-2 text-slate-400">Or continue with</span>
+                  </div>
+                </div>
+              )}
+              {!allowManualLogin && (
+                <p className="mb-4 text-center text-sm text-slate-400">
+                  Sign in with your company Google account.
+                </p>
+              )}
+              {!allowManualLogin && error && (
+                <p className="mb-4 text-sm text-red-400" role="alert">
+                  {error}
+                </p>
+              )}
               <button
                 type="button"
-                onClick={() => setShowPassword((p) => !p)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-white/10 hover:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                aria-label={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
-                tabIndex={-1}
+                onClick={() => {
+                  setGoogleLoading(true);
+                  window.location.href = "/api/auth/google";
+                }}
+                disabled={loading || googleLoading}
+                className={`flex h-12 w-full items-center justify-center gap-3 rounded-xl px-4 font-medium text-white transition-all active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60 ${
+                  allowManualLogin
+                    ? "mt-4 border border-white/10 bg-white/5 hover:bg-white/10"
+                    : "bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/25 hover:scale-[1.02] hover:shadow-blue-500/30"
+                }`}
               >
-                {showPassword ? (
-                  <EyeOff className="h-5 w-5" aria-hidden />
-                ) : (
-                  <Eye className="h-5 w-5" aria-hidden />
-                )}
-              </button>
-            </div>
-          </div>
-
-          {error && (
-            <p className="text-sm text-red-400" role="alert">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading || googleLoading}
-            className="flex h-12 w-full items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 font-medium text-white shadow-lg shadow-blue-500/25 transition-all hover:scale-[1.02] hover:shadow-blue-500/30 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
-          >
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <svg
-                  className="h-5 w-5 animate-spin text-white"
-                  viewBox="0 0 24 24"
-                  aria-hidden
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                    fill="none"
-                  />
-                  <path
-                    className="opacity-90"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-                Signing in…
-              </span>
-            ) : (
-              "Sign in"
-            )}
-          </button>
-        </form>
-
-        <div className="mt-6">
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/10"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="bg-white/5 px-2 text-slate-400">Or continue with</span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setGoogleLoading(true);
-              window.location.href = "/api/auth/google";
-            }}
-            disabled={loading || googleLoading}
-            className="mt-4 flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-white/5 px-4 font-medium text-white transition-all hover:bg-white/10 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-60"
-          >
             {googleLoading ? (
               <svg
                 className="h-5 w-5 animate-spin text-white"
@@ -227,8 +263,10 @@ function LoginForm() {
                 Sign in with Google
               </>
             )}
-          </button>
-        </div>
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -6,12 +6,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/client";
 import { sign } from "@/lib/auth/jwt";
 import { sessionCookieName } from "@/lib/auth/session";
+import { getConfig } from "@/lib/config";
 import * as bcrypt from "bcryptjs";
 import { z } from "zod";
 
 const bodySchema = z.object({ email: z.string().email(), password: z.string().min(1) });
 
 export async function POST(req: NextRequest) {
+  const config = await getConfig();
+  const allowManual = (config.google_allow_manual_login ?? "true").toLowerCase() !== "false";
+  if (!allowManual) {
+    return NextResponse.json(
+      { error: "Manual login is disabled. Please sign in with Google." },
+      { status: 403 }
+    );
+  }
+
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });

@@ -27,6 +27,7 @@ export const CONFIG_KEYS = [
   "google_client_id",
   "google_client_secret",
   "google_allowed_domain",
+  "google_allow_manual_login",
 ] as const;
 
 export const SENSITIVE_KEYS = [
@@ -49,4 +50,5 @@ export const CONFIG_DEFAULTS: Partial<Record<(typeof CONFIG_KEYS)[number], strin
   ai_testcase_max_retry: "3",
   ai_queue_enabled: "true",
   scheduler_interval_ms: "60000",
+  google_allow_manual_login: "true",
 };

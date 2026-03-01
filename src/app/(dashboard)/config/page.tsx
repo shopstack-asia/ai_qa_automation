@@ -117,6 +117,7 @@ const LABELS: Record<string, string> = {
   google_client_id: "Google OAuth Client ID",
   google_client_secret: "Google OAuth Client Secret",
   google_allowed_domain: "Google Allowed Domain (optional, e.g. company.com)",
+  google_allow_manual_login: "Allow manual login (email/password)",
 };
 
 const SECTIONS: { title: string; description?: string; keys: readonly string[] }[] = [
@@ -169,6 +170,7 @@ const SECTIONS: { title: string; description?: string; keys: readonly string[] }
       "google_client_id",
       "google_client_secret",
       "google_allowed_domain",
+      "google_allow_manual_login",
     ],
   },
 ];
@@ -570,6 +572,17 @@ export default function ConfigPage() {
                         <option key={opt.value || "_empty"} value={opt.value}>{opt.label}</option>
                       ))}
                     </select>
+                  ) : key === "google_allow_manual_login" ? (
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id={key}
+                        checked={(current || "true").toLowerCase() !== "false"}
+                        onCheckedChange={(checked) => handleChange(key, checked ? "true" : "false")}
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        {(current || "true").toLowerCase() !== "false" ? "Enabled" : "Disabled — login page shows Google only"}
+                      </span>
+                    </div>
                   ) : key === "openai_system_prompt" || key === "openai_user_prompt_template" ? (
                     <div className="space-y-2">
                       <textarea
