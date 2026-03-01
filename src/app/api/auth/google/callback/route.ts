@@ -116,10 +116,19 @@ export async function GET(req: NextRequest) {
     });
 
     return res;
-  } catch (err) {
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.error("Google OAuth callback error:", err);
+    const friendly =
+      /redirect_uri_mismatch|redirect_uri/i.test(msg)
+        ? "Redirect URI mismatch — add the exact callback URL in Google Console"
+        : /invalid_grant|invalid code|code already used/i.test(msg)
+          ? "Login link expired — try signing in with Google again"
+          : /JWT_SECRET|signing/i.test(msg)
+            ? "Server configuration error — JWT_SECRET not set or too short"
+            : "Authentication failed";
     return NextResponse.redirect(
-      new URL(`/login?error=${encodeURIComponent("Authentication failed")}`, origin)
+      new URL(`/login?error=${encodeURIComponent(friendly)}`, origin)
     );
   }
 }
