@@ -35,12 +35,14 @@ let cache: ConfigMap | null = null;
 let cacheTs = 0;
 const CACHE_MS = 30_000;
 
-export async function getConfig(): Promise<ConfigMap> {
+export type GetConfigOptions = { skipCache?: boolean };
+
+export async function getConfig(options?: GetConfigOptions): Promise<ConfigMap> {
   if (process.env.NEXT_PHASE === "phase-production-build") {
     return { ...CONFIG_DEFAULTS } as ConfigMap;
   }
   const now = Date.now();
-  if (cache && now - cacheTs < CACHE_MS) {
+  if (!options?.skipCache && cache && now - cacheTs < CACHE_MS) {
     return cache;
   }
 
@@ -62,8 +64,10 @@ export async function getConfig(): Promise<ConfigMap> {
     out[key as keyof ConfigMap] = dbVal || envVal || defaultVal;
   }
 
-  cache = out;
-  cacheTs = now;
+  if (!options?.skipCache) {
+    cache = out;
+    cacheTs = now;
+  }
   return out;
 }
 
