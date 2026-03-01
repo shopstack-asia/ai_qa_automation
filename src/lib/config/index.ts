@@ -52,7 +52,8 @@ export async function getConfig(options?: GetConfigOptions): Promise<ConfigMap> 
 
   const fromDb: Record<string, string> = {};
   for (const r of rows) {
-    fromDb[r.key] = r.value;
+    // Coerce to string so boolean false from DB/driver becomes "false" (not falsy)
+    fromDb[r.key] = String(r.value ?? "");
   }
 
   const out: ConfigMap = {};
@@ -61,7 +62,9 @@ export async function getConfig(options?: GetConfigOptions): Promise<ConfigMap> 
     const envVal = envKey ? (process.env[envKey] ?? "") : "";
     const dbVal = fromDb[key] ?? "";
     const defaultVal = CONFIG_DEFAULTS[key as keyof typeof CONFIG_DEFAULTS] ?? "";
-    out[key as keyof ConfigMap] = dbVal || envVal || defaultVal;
+    // If key exists in DB (row was found), use dbVal even when it's "false"
+    const hasDbVal = key in fromDb;
+    out[key as keyof ConfigMap] = hasDbVal ? dbVal : (envVal || defaultVal);
   }
 
   if (!options?.skipCache) {
