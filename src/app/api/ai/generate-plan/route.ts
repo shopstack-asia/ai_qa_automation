@@ -3,16 +3,13 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { aiGeneratePlanSchema } from "@/lib/validations/schemas";
 import { generateStructuredPlanFromAC } from "@/lib/ai/generate-plan";
 import { prisma } from "@/lib/db/client";
 
-export async function POST(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.CREATE_TEST_CASES);
-  if (auth instanceof NextResponse) return auth;
-
+export const POST = withApiKeyLogging(PERMISSIONS.CREATE_TEST_CASES, async (req, auth) => {
   const parsed = aiGeneratePlanSchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -38,4 +35,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ plan });
-}
+});

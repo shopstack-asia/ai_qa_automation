@@ -12,11 +12,17 @@ export async function hashApiKey(plainKey: string): Promise<string> {
 }
 
 export async function verifyApiKey(plainKey: string): Promise<boolean> {
-  if (!plainKey || plainKey.length < 8) return false;
-  const keys = await prisma.apiKey.findMany({ select: { keyHash: true } });
-  for (const { keyHash } of keys) {
+  const id = await getApiKeyIdIfValid(plainKey);
+  return id !== null;
+}
+
+/** Returns the ApiKey id when the plain key is valid; null otherwise. Use for request logging. */
+export async function getApiKeyIdIfValid(plainKey: string): Promise<string | null> {
+  if (!plainKey || plainKey.length < 8) return null;
+  const keys = await prisma.apiKey.findMany({ select: { id: true, keyHash: true } });
+  for (const { id, keyHash } of keys) {
     const ok = await bcrypt.compare(plainKey, keyHash);
-    if (ok) return true;
+    if (ok) return id;
   }
-  return false;
+  return null;
 }

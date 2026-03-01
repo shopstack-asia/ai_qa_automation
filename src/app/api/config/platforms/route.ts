@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db/client";
 
@@ -30,10 +30,7 @@ function normalizePlatforms(raw: unknown): PlatformItem[] {
   return mapped.filter((x) => x.name.length > 0);
 }
 
-export async function GET() {
-  const auth = await requirePermission(PERMISSIONS.VIEW_EXECUTION_RESULTS);
-  if (auth instanceof NextResponse) return auth;
-
+export const GET = withApiKeyLogging(PERMISSIONS.VIEW_EXECUTION_RESULTS, async (_req) => {
   const row = await prisma.systemConfig.findUnique({
     where: { key: PLATFORM_LIST_KEY },
   });
@@ -51,12 +48,9 @@ export async function GET() {
       platforms: DEFAULT_NAMES.map((name) => ({ name, testTypes: [...TEST_TYPES] })),
     });
   }
-}
+});
 
-export async function PUT(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.MANAGE_GLOBAL_CONFIG);
-  if (auth instanceof NextResponse) return auth;
-
+export const PUT = withApiKeyLogging(PERMISSIONS.MANAGE_GLOBAL_CONFIG, async (req, auth) => {
   const body = await req.json();
   const raw = body?.platforms;
   if (!Array.isArray(raw)) {
@@ -72,4 +66,4 @@ export async function PUT(req: NextRequest) {
   });
 
   return NextResponse.json({ platforms });
-}
+});

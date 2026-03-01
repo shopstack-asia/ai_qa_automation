@@ -4,7 +4,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db/client";
 import {
@@ -19,18 +19,12 @@ import { z } from "zod";
 const setOneSchema = z.object({ key: z.string(), value: z.string(), description: z.string().optional() });
 const bulkSchema = z.record(z.string(), z.string());
 
-export async function GET() {
-  const auth = await requirePermission(PERMISSIONS.MANAGE_GLOBAL_CONFIG);
-  if (auth instanceof NextResponse) return auth;
-
+export const GET = withApiKeyLogging(PERMISSIONS.MANAGE_GLOBAL_CONFIG, async (_req) => {
   const config = await getConfigForDisplay();
   return NextResponse.json(config);
-}
+});
 
-export async function PATCH(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.MANAGE_GLOBAL_CONFIG);
-  if (auth instanceof NextResponse) return auth;
-
+export const PATCH = withApiKeyLogging(PERMISSIONS.MANAGE_GLOBAL_CONFIG, async (req, auth) => {
   const body = await req.json();
 
   if (typeof body.key === "string" && body.value !== undefined) {
@@ -83,4 +77,4 @@ export async function PATCH(req: NextRequest) {
   }
   clearConfigCache();
   return NextResponse.json({ updated: updates.length, keys: updates.map((u) => u.key) });
-}
+});

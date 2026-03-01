@@ -96,16 +96,26 @@ export const updateApplicationSchema = createApplicationSchema
 
 // ----- Ticket -----
 
-export const createTicketSchema = z.object({
-  projectId: z.string().cuid(),
-  title: z.string().min(1).max(500),
-  description: z.string().max(10000).optional(),
-  acceptanceCriteria: z.string().max(10000).optional(),
-  externalId: z.string().max(255).optional(),
-  priority: z.string().max(64).optional(),
-  applicationIds: z.array(z.string().cuid()).optional(),
-  primaryActor: z.string().max(100).optional().nullable(),
-});
+export const createTicketSchema = z
+  .object({
+    projectId: z.string().cuid().optional(),
+    projectKey: z.string().min(1).max(64).optional(), // Jira project key (e.g. PROJ, QA)
+    title: z.string().min(1).max(500),
+    description: z.string().max(10000).optional(),
+    acceptanceCriteria: z.string().max(10000).optional(),
+    externalId: z.string().max(255).optional(),
+    priority: z.string().max(64).optional(),
+    applicationIds: z.array(z.string().cuid()).optional(),
+    primaryActor: z.string().max(100).optional().nullable(),
+  })
+  .refine(
+    (data) => {
+      const hasId = data.projectId != null && data.projectId !== "";
+      const hasKey = data.projectKey != null && data.projectKey.trim() !== "";
+      return hasId !== hasKey; // exactly one
+    },
+    { message: "Provide exactly one of projectId or projectKey" }
+  );
 
 export const updateTicketSchema = z.object({
   title: z.string().min(1).max(500).optional(),

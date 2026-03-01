@@ -3,18 +3,13 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db/client";
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const auth = await requirePermission(PERMISSIONS.VIEW_EXECUTION_RESULTS);
-  if (auth instanceof NextResponse) return auth;
-
-  const { id } = await params;
+export const GET = withApiKeyLogging(PERMISSIONS.VIEW_EXECUTION_RESULTS, async (_req, _auth, context) => {
+  const params = await context?.params ?? {};
+  const id = params.id as string;
   const execution = await prisma.execution.findUnique({
     where: { id },
     include: {
@@ -25,4 +20,4 @@ export async function GET(
   });
   if (!execution) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(execution);
-}
+});

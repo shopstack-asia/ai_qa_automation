@@ -271,6 +271,7 @@ export default function ProjectDetailPage() {
   const [ticketActionDropdownId, setTicketActionDropdownId] = useState<string | null>(null);
   const ticketActionDropdownRef = useRef<HTMLDivElement>(null);
   const [ticketConfirmAction, setTicketConfirmAction] = useState<{ ticketId: string; status: "READY_TO_TEST" | "DONE" | "CANCEL" } | null>(null);
+  const [ticketConfirmDeleteId, setTicketConfirmDeleteId] = useState<string | null>(null);
   const [viewTicketEditForm, setViewTicketEditForm] = useState<{
     title: string;
     description: string;
@@ -1489,6 +1490,24 @@ export default function ProjectDetailPage() {
       }
     } catch {
       // ignore
+    }
+  };
+
+  const deleteTicket = async (ticketId: string) => {
+    try {
+      const res = await fetch(`/api/tickets/${ticketId}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        loadTickets();
+        if (viewTicket?.id === ticketId) setViewTicket(null);
+        toast.success("Ticket deleted.");
+      } else {
+        toast.error((data.error as string) ?? "Failed to delete ticket.");
+      }
+    } catch {
+      toast.error("Failed to delete ticket.");
+    } finally {
+      setTicketConfirmDeleteId(null);
     }
   };
 
@@ -2714,7 +2733,7 @@ export default function ProjectDetailPage() {
                             <div className="absolute right-0 top-full z-[100] mt-1.5 min-w-[8rem] rounded-lg border border-border bg-surface py-1 shadow-xl ring-1 ring-black/10 dark:ring-white/10">
                               <button
                                 type="button"
-                                className="w-full px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 rounded-lg"
+                                className="w-full px-3 py-2 text-left text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 rounded-lg"
                                 onClick={() => {
                                   setTicketActionDropdownId(null);
                                   setTicketConfirmAction({ ticketId: t.id, status: "CANCEL" });
@@ -2722,6 +2741,18 @@ export default function ProjectDetailPage() {
                               >
                                 Cancel
                               </button>
+                              {(t._count?.testCases ?? 0) === 0 && (
+                                <button
+                                  type="button"
+                                  className="w-full px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 rounded-lg"
+                                  onClick={() => {
+                                    setTicketActionDropdownId(null);
+                                    setTicketConfirmDeleteId(t.id);
+                                  }}
+                                >
+                                  Delete
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -2753,7 +2784,7 @@ export default function ProjectDetailPage() {
                             <div className="absolute right-0 top-full z-[100] mt-1.5 min-w-[8rem] rounded-lg border border-border bg-surface py-1 shadow-xl ring-1 ring-black/10 dark:ring-white/10">
                               <button
                                 type="button"
-                                className="w-full px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 rounded-lg"
+                                className="w-full px-3 py-2 text-left text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 rounded-lg"
                                 onClick={() => {
                                   setTicketActionDropdownId(null);
                                   setTicketConfirmAction({ ticketId: t.id, status: "CANCEL" });
@@ -2765,7 +2796,20 @@ export default function ProjectDetailPage() {
                           )}
                         </div>
                       )}
-                      {(t.status === "DONE" || t.status === "CANCEL") && <span className="text-xs text-muted-foreground">—</span>}
+                      {(t.status === "DONE" || (t.status === "CANCEL" && (t._count?.testCases ?? 0) > 0)) && (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                      {t.status === "CANCEL" && (t._count?.testCases ?? 0) === 0 && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => setTicketConfirmDeleteId(t.id)}
+                        >
+                          Delete
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))
@@ -4679,6 +4723,33 @@ export default function ProjectDetailPage() {
               }}
             >
               Yes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!ticketConfirmDeleteId} onOpenChange={(open) => !open && setTicketConfirmDeleteId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete ticket</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this ticket? This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={() => setTicketConfirmDeleteId(null)}>
+              No
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              onClick={() => {
+                if (ticketConfirmDeleteId) {
+                  deleteTicket(ticketConfirmDeleteId);
+                }
+              }}
+            >
+              Yes, delete
             </Button>
           </DialogFooter>
         </DialogContent>

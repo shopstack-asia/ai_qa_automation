@@ -5,14 +5,11 @@
 
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db/client";
 
-export async function GET(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.VIEW_REPORTS);
-  if (auth instanceof NextResponse) return auth;
-
+export const GET = withApiKeyLogging(PERMISSIONS.VIEW_REPORTS, async (req) => {
   const { searchParams } = new URL(req.url);
   const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10) || 20));
@@ -71,4 +68,4 @@ export async function GET(req: NextRequest) {
     limit,
     totalPages,
   });
-}
+});

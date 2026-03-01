@@ -5,21 +5,16 @@
 
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db/client";
 import { getConfig } from "@/lib/config";
 import { updateTicketSchema } from "@/lib/validations/schemas";
 import { enqueueAITestcaseJob } from "@/lib/queue/ai-testcase-queue";
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const auth = await requirePermission(PERMISSIONS.VIEW_EXECUTION_RESULTS);
-  if (auth instanceof NextResponse) return auth;
-
-  const { id } = await params;
+export const GET = withApiKeyLogging(PERMISSIONS.VIEW_EXECUTION_RESULTS, async (_req, _auth, context) => {
+  const params = await context?.params ?? {};
+  const id = params.id as string;
   const ticket = await prisma.ticket.findUnique({
     where: { id },
     include: {
@@ -31,16 +26,11 @@ export async function GET(
   });
   if (!ticket) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(ticket);
-}
+});
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const auth = await requirePermission(PERMISSIONS.EDIT_TEST_CASES);
-  if (auth instanceof NextResponse) return auth;
-
-  const { id } = await params;
+export const PATCH = withApiKeyLogging(PERMISSIONS.EDIT_TEST_CASES, async (req, auth, context) => {
+  const params = await context?.params ?? {};
+  const id = params.id as string;
   const parsed = updateTicketSchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -105,19 +95,31 @@ export async function PATCH(
     aiQueueDisabled,
     jobAlreadyQueued,
   });
-}
+});
 
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const auth = await requirePermission(PERMISSIONS.EDIT_TEST_CASES);
-  if (auth instanceof NextResponse) return auth;
-
-  const { id } = await params;
-  const ticket = await prisma.ticket.findUnique({ where: { id } });
+export const DELETE = withApiKeyLogging(PERMISSIONS.EDIT_TEST_CASES, async (_req, _auth, context) => {
+  const params = await context?.params ?? {};
+  const id = params.id as string;
+  const ticket = await prisma.ticket.findUnique({
+    where: { id },
+    include: { _count: { select: { testCases: true } } },
+  });
   if (!ticket) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const allowedStatuses = ["DRAFT", "CANCEL"];
+  if (!allowedStatuses.includes(ticket.status)) {
+    return NextResponse.json(
+      { error: "Only tickets with status DRAFT or CANCEL can be deleted." },
+      { status: 400 }
+    );
+  }
+  if ((ticket._count?.testCases ?? 0) > 0) {
+    return NextResponse.json(
+      { error: "Cannot delete a ticket that has related test cases. Remove or unlink test cases first." },
+      { status: 400 }
+    );
+  }
 
   await prisma.ticket.delete({ where: { id } });
   return NextResponse.json({ ok: true });
-}
+});

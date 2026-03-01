@@ -2,14 +2,11 @@
  * GET /api/auth/me – current user (requires auth).
  */
 
-import { NextResponse } from "next/server";
-import { requireAuth } from "@/lib/auth/require-auth";
+import { NextRequest, NextResponse } from "next/server";
+import { withApiKeyLoggingAuth } from "@/lib/auth/require-auth";
 import { prisma } from "@/lib/db/client";
 
-export async function GET() {
-  const auth = await requireAuth();
-  if (auth instanceof NextResponse) return auth;
-
+export const GET = withApiKeyLoggingAuth(async (_req, auth) => {
   const user = await prisma.user.findUnique({
     where: { id: auth.userId },
     select: { id: true, email: true, name: true, role: true, isActive: true },
@@ -18,4 +15,4 @@ export async function GET() {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
   return NextResponse.json(user);
-}
+});

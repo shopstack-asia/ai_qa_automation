@@ -4,15 +4,12 @@
 
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db/client";
 import { importTicketsSchema } from "@/lib/validations/schemas";
 
-export async function POST(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.CREATE_TEST_CASES);
-  if (auth instanceof NextResponse) return auth;
-
+export const POST = withApiKeyLogging(PERMISSIONS.CREATE_TEST_CASES, async (req) => {
   const parsed = importTicketsSchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -37,4 +34,4 @@ export async function POST(req: NextRequest) {
   );
 
   return NextResponse.json({ created: created.length, ids: created.map((c) => c.id) });
-}
+});

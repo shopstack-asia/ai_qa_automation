@@ -3,16 +3,13 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db/client";
 import { createProjectSchema } from "@/lib/validations/schemas";
 import { encrypt } from "@/lib/encryption";
 
-export async function GET() {
-  const auth = await requirePermission(PERMISSIONS.VIEW_EXECUTION_RESULTS);
-  if (auth instanceof NextResponse) return auth;
-
+export const GET = withApiKeyLogging(PERMISSIONS.VIEW_EXECUTION_RESULTS, async (_req) => {
   const list = await prisma.project.findMany({
     where: { isActive: true },
     select: {
@@ -85,12 +82,9 @@ export async function GET() {
   });
 
   return NextResponse.json(result);
-}
+});
 
-export async function POST(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.CREATE_PROJECT);
-  if (auth instanceof NextResponse) return auth;
-
+export const POST = withApiKeyLogging(PERMISSIONS.CREATE_PROJECT, async (req, auth) => {
   const body = await req.json();
   const parsed = createProjectSchema.safeParse(body);
   if (!parsed.success) {
@@ -107,4 +101,4 @@ export async function POST(req: NextRequest) {
 
   const project = await prisma.project.create({ data });
   return NextResponse.json(project);
-}
+});

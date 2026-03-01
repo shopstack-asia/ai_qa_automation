@@ -4,16 +4,13 @@
 
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db/client";
 import { createScheduleSchema } from "@/lib/validations/schemas";
 import { getNextRunFromCron } from "@/lib/scheduler/next-run";
 
-export async function GET(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.VIEW_REPORTS);
-  if (auth instanceof NextResponse) return auth;
-
+export const GET = withApiKeyLogging(PERMISSIONS.VIEW_REPORTS, async (req) => {
   const projectId = req.nextUrl.searchParams.get("projectId");
   const list = await prisma.schedule.findMany({
     where: projectId ? { projectId } : undefined,
@@ -36,12 +33,9 @@ export async function GET(req: NextRequest) {
     environments: s.environmentIds.map((id) => envMap.get(id) ?? { id, name: id }).filter(Boolean),
   }));
   return NextResponse.json(withEnvironments);
-}
+});
 
-export async function POST(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.MANAGE_SCHEDULE);
-  if (auth instanceof NextResponse) return auth;
-
+export const POST = withApiKeyLogging(PERMISSIONS.MANAGE_SCHEDULE, async (req) => {
   const parsed = createScheduleSchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -69,4 +63,4 @@ export async function POST(req: NextRequest) {
     select: { id: true, name: true },
   });
   return NextResponse.json({ ...schedule, environments: envs });
-}
+});

@@ -3,14 +3,11 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { aiTestcaseQueue } from "@/lib/queue/ai-testcase-queue";
 
-export async function POST(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.VIEW_REPORTS);
-  if (auth instanceof NextResponse) return auth;
-
+export const POST = withApiKeyLogging(PERMISSIONS.VIEW_REPORTS, async (req) => {
   const body = await req.json().catch(() => ({}));
   const jobId = typeof body.jobId === "string" ? body.jobId.trim() : null;
   if (!jobId) {
@@ -33,4 +30,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
+});

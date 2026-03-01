@@ -58,6 +58,29 @@ model ApiKey {
   name      String   @unique  // e.g. "N8N Production", "CI"
   keyHash   String   // bcrypt hash; never store plain key
   createdAt DateTime @default(now())
+
+  requestLogs ApiKeyRequestLog[]
+}
+
+// =============================================================================
+// API Key request/response logs (N8N / external integration calls)
+// =============================================================================
+
+model ApiKeyRequestLog {
+  id             String   @id @default(cuid())
+  apiKeyId       String?
+  apiKey         ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  tokenLast4     String?  // last 4 chars of Bearer token (for display only, not stored in full)
+  method         String   // GET, POST, PATCH, DELETE
+  path           String   // e.g. /api/tickets
+  requestBody    Json?    // request body for POST/PATCH
+  responseStatus Int      // HTTP status code
+  responseBody   Json?    // response JSON
+  createdAt      DateTime @default(now())
+
+  @@index([apiKeyId])
+  @@index([createdAt])
+  @@index([path])
 }
 
 // =============================================================================

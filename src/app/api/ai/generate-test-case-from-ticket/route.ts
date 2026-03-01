@@ -5,15 +5,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { aiGenerateTestCaseFromTicketSchema } from "@/lib/validations/schemas";
 import { generateTestCaseFromTicket } from "@/lib/ai/generate-test-case-from-ticket";
 
-export async function POST(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.CREATE_TEST_CASES);
-  if (auth instanceof NextResponse) return auth;
-
+export const POST = withApiKeyLogging(PERMISSIONS.CREATE_TEST_CASES, async (req, auth) => {
   const parsed = aiGenerateTestCaseFromTicketSchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -28,4 +25,4 @@ export async function POST(req: NextRequest) {
     const message = err instanceof Error ? err.message : "Generation failed";
     return NextResponse.json({ error: message }, { status: 400 });
   }
-}
+});

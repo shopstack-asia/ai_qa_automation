@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db/client";
 import { hashApiKey } from "@/lib/api-keys";
@@ -20,10 +20,7 @@ function generateApiToken(): string {
   return randomBytes(64).toString("base64url");
 }
 
-export async function GET() {
-  const auth = await requirePermission(PERMISSIONS.MANAGE_GLOBAL_CONFIG);
-  if (auth instanceof NextResponse) return auth;
-
+export const GET = withApiKeyLogging(PERMISSIONS.MANAGE_GLOBAL_CONFIG, async (_req) => {
   const list = await prisma.apiKey.findMany({
     select: { id: true, name: true, createdAt: true },
     orderBy: { createdAt: "desc" },
@@ -31,12 +28,9 @@ export async function GET() {
   return NextResponse.json(
     list.map((r) => ({ id: r.id, name: r.name, key: "••••••", createdAt: r.createdAt }))
   );
-}
+});
 
-export async function POST(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.MANAGE_GLOBAL_CONFIG);
-  if (auth instanceof NextResponse) return auth;
-
+export const POST = withApiKeyLogging(PERMISSIONS.MANAGE_GLOBAL_CONFIG, async (req) => {
   const parsed = createSchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -61,4 +55,4 @@ export async function POST(req: NextRequest) {
     createdKey: plainToken,
     message: "Copy the API token now — it cannot be shown again.",
   });
-}
+});

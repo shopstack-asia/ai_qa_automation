@@ -1,21 +1,22 @@
 /**
  * GET /api/tickets?projectId= | POST – create.
+ * When created via API (Bearer API key): status READY_TO_TEST + ส่ง job สร้าง TC ไปรันใน background (queue).
+ * Log ผ่าน withApiKeyLogging (ทุก endpoint ที่เรียกด้วย API key จะถูก log ที่กลาง).
  */
 
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db/client";
+import { getConfig } from "@/lib/config";
 import { createTicketSchema } from "@/lib/validations/schemas";
+import { enqueueAITestcaseJob } from "@/lib/queue/ai-testcase-queue";
 
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;
 
-export async function GET(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.VIEW_EXECUTION_RESULTS);
-  if (auth instanceof NextResponse) return auth;
-
+export const GET = withApiKeyLogging(PERMISSIONS.VIEW_EXECUTION_RESULTS, async (req) => {
   const projectId = req.nextUrl.searchParams.get("projectId");
   if (!projectId) {
     return NextResponse.json({ error: "projectId required" }, { status: 400 });
@@ -87,29 +88,79 @@ export async function GET(req: NextRequest) {
     limit,
     totalPages: Math.ceil(total / limit) || 1,
   });
-}
+});
 
-export async function POST(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.CREATE_TEST_CASES);
-  if (auth instanceof NextResponse) return auth;
-
+export const POST = withApiKeyLogging(PERMISSIONS.CREATE_TEST_CASES, async (req, auth) => {
   const parsed = createTicketSchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  let projectId: string;
+  if (parsed.data.projectId) {
+    projectId = parsed.data.projectId;
+    const exists = await prisma.project.findUnique({ where: { id: projectId }, select: { id: true } });
+    if (!exists) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+  } else {
+    const project = await prisma.project.findFirst({
+      where: { jiraProjectKey: { equals: parsed.data.projectKey!.trim(), mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (!project) {
+      return NextResponse.json(
+        { error: `No project found with Jira project key: ${parsed.data.projectKey}` },
+        { status: 404 }
+      );
+    }
+    projectId = project.id;
+  }
+
+  const isApiKeyAuth = auth.userId === "api-key";
   const ticket = await prisma.ticket.create({
     data: {
-      projectId: parsed.data.projectId,
+      projectId,
       title: parsed.data.title,
       description: parsed.data.description ?? null,
       acceptanceCriteria: parsed.data.acceptanceCriteria ?? null,
-      status: "DRAFT",
+      status: isApiKeyAuth ? "READY_TO_TEST" : "DRAFT",
       externalId: parsed.data.externalId ?? null,
       priority: parsed.data.priority ?? null,
       applicationIds: parsed.data.applicationIds?.length ? parsed.data.applicationIds : Prisma.DbNull,
       primaryActor: parsed.data.primaryActor ?? null,
     },
   });
-  return NextResponse.json(ticket);
-}
+
+  let payload: Record<string, unknown> = { ...ticket };
+  if (isApiKeyAuth) {
+    const config = await getConfig();
+    const queueEnabled = (config.ai_queue_enabled ?? "true").toLowerCase() !== "false";
+    if (queueEnabled) {
+      try {
+        const jobId = await enqueueAITestcaseJob({ ticketId: ticket.id, retryCount: 0 });
+        payload.autoGenerateQueued = jobId !== null;
+        if (jobId) payload.autoGenerateJobId = jobId;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        await prisma.ticket.update({
+          where: { id: ticket.id },
+          data: { status: "DRAFT" },
+        });
+        payload = { ...ticket, status: "DRAFT" };
+        payload.autoGenerateQueued = false;
+        payload.autoGenerateError = "Failed to queue TC generation. Check Redis (REDIS_URL).";
+      }
+    } else {
+      await prisma.ticket.update({
+        where: { id: ticket.id },
+        data: { status: "DRAFT" },
+      });
+      payload = { ...ticket, status: "DRAFT" };
+      payload.autoGenerateQueued = false;
+      payload.autoGenerateError = "AI test case queue is disabled (Config: ai_queue_enabled).";
+    }
+  }
+
+  return NextResponse.json(payload);
+});

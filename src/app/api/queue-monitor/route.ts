@@ -3,15 +3,12 @@
  * Admin only (VIEW_REPORTS).
  */
 
-import { NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { NextRequest, NextResponse } from "next/server";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { aiTestcaseQueue } from "@/lib/queue/ai-testcase-queue";
 
-export async function GET() {
-  const auth = await requirePermission(PERMISSIONS.VIEW_REPORTS);
-  if (auth instanceof NextResponse) return auth;
-
+export const GET = withApiKeyLogging(PERMISSIONS.VIEW_REPORTS, async (_req) => {
   try {
     const counts = await aiTestcaseQueue.getJobCounts();
     const [waiting, active, failed] = await Promise.all([
@@ -49,4 +46,4 @@ export async function GET() {
       { status: 500 }
     );
   }
-}
+});

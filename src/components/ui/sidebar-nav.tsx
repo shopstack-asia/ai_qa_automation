@@ -13,6 +13,7 @@ import {
   ScrollText,
   ClipboardList,
   HardDrive,
+  KeyRound,
 } from "lucide-react";
 import { Role } from "@prisma/client";
 
@@ -28,6 +29,7 @@ const allNavItems: NavItem[] = [
   { type: "section", label: "Monitoring" },
   { type: "link", href: "/monitoring/openai-logs", label: "OpenAI Logs", icon: ScrollText },
   { type: "link", href: "/monitoring/s3-logs", label: "S3 Logs", icon: HardDrive },
+  { type: "link", href: "/monitoring/api-request-logs", label: "API Request Log", icon: KeyRound },
   { type: "link", href: "/queue-monitor", label: "Queue Monitor", icon: ClipboardList },
 ];
 

@@ -4,7 +4,7 @@
 
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db/client";
 import { createApplicationSchema } from "@/lib/validations/schemas";
@@ -12,10 +12,7 @@ import { createApplicationSchema } from "@/lib/validations/schemas";
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;
 
-export async function GET(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.VIEW_EXECUTION_RESULTS);
-  if (auth instanceof NextResponse) return auth;
-
+export const GET = withApiKeyLogging(PERMISSIONS.VIEW_EXECUTION_RESULTS, async (req) => {
   const projectId = req.nextUrl.searchParams.get("projectId");
   if (!projectId) {
     return NextResponse.json({ error: "projectId required" }, { status: 400 });
@@ -81,12 +78,9 @@ export async function GET(req: NextRequest) {
     limit,
     totalPages: Math.ceil(total / limit) || 1,
   });
-}
+});
 
-export async function POST(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.CREATE_TEST_CASES);
-  if (auth instanceof NextResponse) return auth;
-
+export const POST = withApiKeyLogging(PERMISSIONS.CREATE_TEST_CASES, async (req) => {
   const body = await req.json();
   const parsed = createApplicationSchema.safeParse(body);
   if (!parsed.success) {
@@ -117,4 +111,4 @@ export async function POST(req: NextRequest) {
     createdAt: app.createdAt,
     updatedAt: app.updatedAt,
   });
-}
+});

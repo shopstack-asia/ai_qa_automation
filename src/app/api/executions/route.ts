@@ -3,17 +3,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db/client";
 import { triggerExecutionSchema } from "@/lib/validations/schemas";
 import { enqueueExecution } from "@/lib/queue/execution-queue";
 import { decrypt } from "@/lib/encryption";
 
-export async function GET(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.VIEW_EXECUTION_RESULTS);
-  if (auth instanceof NextResponse) return auth;
-
+export const GET = withApiKeyLogging(PERMISSIONS.VIEW_EXECUTION_RESULTS, async (req) => {
   const projectId = req.nextUrl.searchParams.get("projectId");
   const environmentId = req.nextUrl.searchParams.get("environmentId");
   const limit = Math.min(Number(req.nextUrl.searchParams.get("limit")) || 50, 100);
@@ -32,12 +29,9 @@ export async function GET(req: NextRequest) {
     take: limit,
   });
   return NextResponse.json(list);
-}
+});
 
-export async function POST(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.TRIGGER_EXECUTION);
-  if (auth instanceof NextResponse) return auth;
-
+export const POST = withApiKeyLogging(PERMISSIONS.TRIGGER_EXECUTION, async (req, auth) => {
   const parsed = triggerExecutionSchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -100,4 +94,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ created });
-}
+});

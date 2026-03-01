@@ -3,7 +3,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { requirePermission } from "@/lib/auth/require-auth";
+import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db/client";
 import * as bcrypt from "bcryptjs";
@@ -16,10 +16,7 @@ const createUserSchema = z.object({
   role: z.enum(["admin", "manager", "qa"]),
 });
 
-export async function GET() {
-  const auth = await requirePermission(PERMISSIONS.MANAGE_USERS);
-  if (auth instanceof NextResponse) return auth;
-
+export const GET = withApiKeyLogging(PERMISSIONS.MANAGE_USERS, async (_req) => {
   const list = await prisma.user.findMany({
     select: {
       id: true,
@@ -32,12 +29,9 @@ export async function GET() {
     orderBy: { email: "asc" },
   });
   return NextResponse.json(list);
-}
+});
 
-export async function POST(req: NextRequest) {
-  const auth = await requirePermission(PERMISSIONS.MANAGE_USERS);
-  if (auth instanceof NextResponse) return auth;
-
+export const POST = withApiKeyLogging(PERMISSIONS.MANAGE_USERS, async (req) => {
   const parsed = createUserSchema.safeParse(await req.json());
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
@@ -68,4 +62,4 @@ export async function POST(req: NextRequest) {
     },
   });
   return NextResponse.json(user);
-}
+});
