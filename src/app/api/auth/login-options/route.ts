@@ -9,7 +9,8 @@ import { getConfig } from "@/lib/config";
 
 export async function GET() {
   const config = await getConfig({ skipCache: true });
-  const allowManual = config.google_allow_manual_login ?? true;
+  console.log("config", config);
+  const allowManual = `${config.google_allow_manual_login ?? true}` !== "false";
   const res = NextResponse.json({ allowManualLogin: allowManual });
   res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
   return res;
