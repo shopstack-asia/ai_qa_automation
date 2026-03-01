@@ -17,8 +17,13 @@ function LoginForm() {
   const [loginOptionsLoaded, setLoginOptionsLoaded] = useState(false);
 
   useEffect(() => {
-    fetch("/api/auth/login-options")
-      .then((r) => (r.ok ? r.json() : { allowManualLogin: true }))
+    // Cache-bust so CDN/proxy never serves stale allowManualLogin (e.g. after deploy)
+    const url = `/api/auth/login-options?t=${Date.now()}`;
+    fetch(url)
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        return r.ok ? data : { ...data, allowManualLogin: true };
+      })
       .then((data) => {
         setAllowManualLogin(data.allowManualLogin ?? true);
         setLoginOptionsLoaded(true);
