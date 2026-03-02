@@ -104,6 +104,24 @@ model OpenAILog {
 }
 
 // =============================================================================
+// N8N webhook call logs (outgoing requests to N8N)
+// =============================================================================
+
+model N8nWebhookLog {
+  id              String   @id @default(cuid())
+  event           String   // e.g. start_testing, test_passed, test_failed
+  url             String   // full webhook URL called
+  requestBody     Json?    // payload sent (POST body)
+  responseStatus  Int?     // HTTP status from N8N (null if request failed before response)
+  responseBody    Json?    // response body from N8N
+  errorMessage    String?  // if fetch failed (network error, etc.)
+  createdAt       DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([event])
+}
+
+// =============================================================================
 // Projects
 // =============================================================================
 
@@ -118,6 +136,7 @@ model Project {
   name                      String
   jiraProjectKey            String?
   n8nWebhookToken           String?             // encrypted at application layer
+  slackChannelId            String?             // Slack channel ID (e.g. C01234ABCD) or #channel-name for chat.postMessage
   defaultExecutionStrategy  ExecutionStrategy   @default(sequential)
   isActive                  Boolean             @default(true)
   createdAt                 DateTime            @default(now())

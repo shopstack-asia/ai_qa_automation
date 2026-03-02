@@ -24,7 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
-import { CONFIG_KEYS, MASKED_VALUE, SENSITIVE_KEYS } from "@/lib/config/constants";
+import { CONFIG_KEYS, MASKED_VALUE, SENSITIVE_KEYS, N8N_WEBHOOK_EVENT_KEYS, SLACK_EVENT_KEYS } from "@/lib/config/constants";
 import { OPENAI_ALL_MODEL_IDS, OPENAI_MODEL_GROUPS } from "@/lib/config/openai-models";
 import { PROMPT_TEMPLATE_VARIABLES } from "@/lib/ai/prompt-template-variables";
 import { getNextRunFromCron, validateCronExpression } from "@/lib/scheduler/next-run";
@@ -99,6 +99,7 @@ const LABELS: Record<string, string> = {
   retry_limit: "Retry limit",
   execution_timeout: "Execution timeout (ms)",
   global_rate_limit: "Global rate limit",
+  run_test_mode: "Run on test mode (use /webhook-test/ for N8N)",
   openai_api_key: "OpenAI API key",
   openai_model: "OpenAI model",
   openai_system_prompt: "System prompt for generate test case",
@@ -118,6 +119,18 @@ const LABELS: Record<string, string> = {
   google_client_secret: "Google OAuth Client Secret",
   google_allowed_domain: "Google Allowed Domain (optional, e.g. company.com)",
   google_allow_manual_login: "Allow manual login (email/password)",
+  n8n_enabled: "N8N webhooks enabled",
+  n8n_domain: "N8N domain (base URL)",
+  n8n_webhook_start_testing: "Webhook path: Start Testing",
+  n8n_webhook_test_passed: "Webhook path: Test Passed",
+  n8n_webhook_test_failed: "Webhook path: Test Failed (Business Failed)",
+  slack_enabled: "Slack notifications enabled",
+  slack_bot_token: "Slack Bot Token (xoxb-...)",
+  slack_event_new_ticket: "New ticket",
+  slack_event_generate_test_cases: "Generate test cases",
+  slack_event_testing: "Testing",
+  slack_event_test_passed: "Test passed",
+  slack_event_test_failed: "Test failed",
 };
 
 const SECTIONS: { title: string; description?: string; keys: readonly string[] }[] = [
@@ -171,6 +184,31 @@ const SECTIONS: { title: string; description?: string; keys: readonly string[] }
       "google_client_secret",
       "google_allowed_domain",
       "google_allow_manual_login",
+    ],
+  },
+  {
+    title: "N8N",
+    description: "Call N8N webhooks on events. Domain is the base URL (e.g. https://n8n.cconnect.app). Each event uses the path you set. URL = domain + /webhook/ + path (or /webhook-test/ + path when Run on test mode is on).",
+    keys: [
+      "n8n_enabled",
+      "run_test_mode",
+      "n8n_domain",
+      "n8n_webhook_start_testing",
+      "n8n_webhook_test_passed",
+      "n8n_webhook_test_failed",
+    ],
+  },
+  {
+    title: "Slack",
+    description: "Send messages via Slack API (chat.postMessage). Use a Slack App Bot Token (xoxb-...). Channel is set per project (Project → Edit → Slack Channel ID).",
+    keys: [
+      "slack_enabled",
+      "slack_bot_token",
+      "slack_event_new_ticket",
+      "slack_event_generate_test_cases",
+      "slack_event_testing",
+      "slack_event_test_passed",
+      "slack_event_test_failed",
     ],
   },
 ];
@@ -435,9 +473,10 @@ export default function ConfigPage() {
     setMessage(null);
     setSavingSection(sectionTitle);
     const payload: Record<string, string> = {};
+    const includeEmpty = sectionTitle === "N8N" || sectionTitle === "Slack";
     for (const key of keys) {
       const value = config[key] ?? "";
-      if (value === "" || value === MASKED_VALUE) continue;
+      if (!includeEmpty && (value === "" || value === MASKED_VALUE)) continue;
       const isSensitive = SENSITIVE_KEYS.includes(key as (typeof SENSITIVE_KEYS)[number]);
       if (isSensitive && value === MASKED_VALUE) continue;
       payload[key] = value;
@@ -583,6 +622,75 @@ export default function ConfigPage() {
                         {(current || "true").toLowerCase() !== "false" ? "Enabled" : "Disabled — login page shows Google only"}
                       </span>
                     </div>
+                  ) : key === "run_test_mode" ? (
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id={key}
+                        checked={(current || "true").toLowerCase() === "true"}
+                        onCheckedChange={(checked) => handleChange(key, checked ? "true" : "false")}
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        {(current || "true").toLowerCase() === "true" ? "Enabled" : "Disabled"}
+                      </span>
+                    </div>
+                  ) : key === "n8n_enabled" ? (
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id={key}
+                        checked={(current || "false").toLowerCase() === "true"}
+                        onCheckedChange={(checked) => handleChange(key, checked ? "true" : "false")}
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        {(current || "false").toLowerCase() === "true" ? "Enabled" : "Disabled"}
+                      </span>
+                    </div>
+                  ) : key === "n8n_domain" ? (
+                    <Input
+                      id={key}
+                      type="text"
+                      value={current}
+                      onChange={(e) => handleChange(key, e.target.value)}
+                      placeholder="https://n8n.cconnect.app"
+                      className="max-w-xl"
+                    />
+                  ) : key === "slack_enabled" ? (
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id={key}
+                        checked={(current || "false").toLowerCase() === "true"}
+                        onCheckedChange={(checked) => handleChange(key, checked ? "true" : "false")}
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        {(current || "false").toLowerCase() === "true" ? "Enabled" : "Disabled"}
+                      </span>
+                    </div>
+                  ) : SLACK_EVENT_KEYS.some((e) => e.key === key) ? (
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id={key}
+                        checked={(current || "false").toLowerCase() === "true"}
+                        onCheckedChange={(checked) => handleChange(key, checked ? "true" : "false")}
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        {(current || "false").toLowerCase() === "true" ? "Send to Slack" : "Off"}
+                      </span>
+                    </div>
+                  ) : N8N_WEBHOOK_EVENT_KEYS.some((e) => e.key === key) ? (
+                    <div className="space-y-1">
+                      <Input
+                        id={key}
+                        type="text"
+                        value={current}
+                        onChange={(e) => handleChange(key, e.target.value)}
+                        placeholder="e.g. create-jira-bug"
+                        className="max-w-xl font-mono text-sm"
+                      />
+                      {(config.n8n_domain ?? "").trim() && (current || "").trim() && (
+                        <p className="text-xs text-muted-foreground">
+                          URL: {[config.n8n_domain?.replace(/\/$/, ""), (config.run_test_mode ?? "false").toLowerCase() === "true" ? "webhook-test" : "webhook", (current || "").trim()].join("/")}
+                        </p>
+                      )}
+                    </div>
                   ) : key === "openai_system_prompt" || key === "openai_user_prompt_template" ? (
                     <div className="space-y-2">
                       <textarea
@@ -591,10 +699,10 @@ export default function ConfigPage() {
                         onChange={(e) => handleChange(key, e.target.value)}
                         rows={5}
                         placeholder="Enter prompt text…"
-                        className="w-full max-w-xl min-h-[6rem] resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        className="w-full max-w-xl min-h-[6rem] resize-y rounded-md border border-border bg-elevated px-3 py-2 text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-0 placeholder:text-muted"
                       />
                       {key === "openai_user_prompt_template" && (
-                        <div className="rounded-md border border-border bg-background px-3 py-2.5 text-sm">
+                        <div className="rounded-md border border-border/50 bg-transparent px-3 py-2.5 text-sm">
                           <p className="font-medium text-foreground mb-2">Variables (use in template):</p>
                           <ul className="space-y-1.5 text-foreground">
                             {PROMPT_TEMPLATE_VARIABLES.map((v) => (

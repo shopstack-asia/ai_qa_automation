@@ -25,6 +25,12 @@ export async function GET(
   });
   if (!project) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  const { n8nWebhookToken: _n8n, ...rest } = project;
+  const safeProject = {
+    ...rest,
+    n8nWebhookConfigured: !!project.n8nWebhookToken,
+  };
+
   const [executionCounts, testRunCounts] = await Promise.all([
     prisma.execution.groupBy({
       by: ["status"],
@@ -52,7 +58,7 @@ export async function GET(
   const testRunTotal = runStatusCounts.RUNNING + runStatusCounts.COMPLETED;
 
   return NextResponse.json({
-    ...project,
+    ...safeProject,
     ticketsCount: project._count.tickets,
     passedCount: statusCounts.PASSED,
     failedCount: statusCounts.FAILED,
@@ -81,10 +87,18 @@ export async function PATCH(
   if ("n8nWebhookToken" in body && body.n8nWebhookToken !== undefined) {
     data.n8nWebhookToken = body.n8nWebhookToken ? encrypt(body.n8nWebhookToken) : null;
   }
+  if ("slackChannelId" in body && body.slackChannelId !== undefined) {
+    const v = body.slackChannelId;
+    data.slackChannelId = v === null || v === "" ? null : String(v).trim() || null;
+  }
 
-  const project = await prisma.project.update({
+  const updated = await prisma.project.update({
     where: { id },
     data: data as Parameters<typeof prisma.project.update>[0]["data"],
   });
-  return NextResponse.json(project);
+  const { n8nWebhookToken: _t, ...safe } = updated;
+  return NextResponse.json({
+    ...safe,
+    n8nWebhookConfigured: !!updated.n8nWebhookToken,
+  });
 }

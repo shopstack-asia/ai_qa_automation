@@ -95,6 +95,7 @@ export const POST = withApiKeyLogging(PERMISSIONS.CREATE_PROJECT, async (req, au
     name: parsed.data.name,
     jiraProjectKey: parsed.data.jiraProjectKey ?? null,
     n8nWebhookToken: parsed.data.n8nWebhookToken ? encrypt(parsed.data.n8nWebhookToken) : null,
+    slackChannelId: parsed.data.slackChannelId?.trim() || null,
     defaultExecutionStrategy: (parsed.data.defaultExecutionStrategy as "sequential" | "parallel" | "adaptive") ?? "sequential",
     isActive: parsed.data.isActive ?? true,
   };

@@ -46,6 +46,7 @@ interface ProjectDetail {
   jiraProjectKey: string | null;
   defaultExecutionStrategy: string;
   isActive: boolean;
+  slackChannelId?: string | null;
   _count: { testCases: number; executions: number; environments: number };
   ticketsCount?: number;
   passedCount?: number;
@@ -184,6 +185,7 @@ export default function ProjectDetailPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editJiraKey, setEditJiraKey] = useState("");
+  const [editSlackChannelId, setEditSlackChannelId] = useState("");
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState("");
 
@@ -951,6 +953,7 @@ export default function ProjectDetailPage() {
     if (project) {
       setEditName(project.name);
       setEditJiraKey(project.jiraProjectKey ?? "");
+      setEditSlackChannelId(project.slackChannelId ?? "");
       setSaveError("");
       setDrawerOpen(true);
     }
@@ -962,20 +965,27 @@ export default function ProjectDetailPage() {
     setSaveError("");
     setSaveLoading(true);
     try {
+      const body: Record<string, unknown> = {
+        name: editName.trim(),
+        jiraProjectKey: editJiraKey.trim() || null,
+        slackChannelId: editSlackChannelId.trim() || null,
+      };
       const res = await fetch(`/api/projects/${project.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: editName.trim(),
-          jiraProjectKey: editJiraKey.trim() || null,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
         setSaveError(data.error?.message ?? (typeof data.error === "object" ? "Update failed" : data.error) ?? "Update failed");
         return;
       }
-      setProject({ ...project, name: data.name, jiraProjectKey: data.jiraProjectKey });
+      setProject({
+        ...project,
+        name: data.name,
+        jiraProjectKey: data.jiraProjectKey,
+        slackChannelId: data.slackChannelId ?? null,
+      });
       setDrawerOpen(false);
     } catch {
       setSaveError("Network error");
@@ -1808,7 +1818,7 @@ export default function ProjectDetailPage() {
             <div className="flex flex-row items-center justify-between gap-4">
               <div>
                 <SheetTitle>Edit project</SheetTitle>
-                <SheetDescription>Change project name and Jira key</SheetDescription>
+                <SheetDescription>Change project name, Jira key, and Slack channel</SheetDescription>
               </div>
               <div className="flex gap-2 shrink-0">
                 <Button type="submit" form="edit-project-form" disabled={saveLoading} size="sm">
@@ -1851,6 +1861,20 @@ export default function ProjectDetailPage() {
                     onChange={(e) => setEditJiraKey(e.target.value)}
                     placeholder="e.g. MYAPP"
                   />
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="edit-slack-channel" className="block text-sm font-medium text-muted-foreground">
+                    Slack Channel ID (optional)
+                  </label>
+                  <Input
+                    id="edit-slack-channel"
+                    value={editSlackChannelId}
+                    onChange={(e) => setEditSlackChannelId(e.target.value)}
+                    placeholder="e.g. C01234ABCD or #general"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Channel to post notifications (Slack API). Set Slack Bot Token in Config → Slack.
+                  </p>
                 </div>
                 {saveError && <p className="text-sm text-destructive">{saveError}</p>}
               </div>

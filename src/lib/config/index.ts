@@ -14,6 +14,7 @@ const ENV_MAP: Record<string, string> = {
   retry_limit: "",
   execution_timeout: "",
   global_rate_limit: "",
+  run_test_mode: "",
   openai_api_key: "OPENAI_API_KEY",
   openai_model: "OPENAI_MODEL",
   s3_bucket: "S3_BUCKET",
@@ -27,6 +28,18 @@ const ENV_MAP: Record<string, string> = {
   google_client_id: "GOOGLE_CLIENT_ID",
   google_client_secret: "GOOGLE_CLIENT_SECRET",
   google_allowed_domain: "GOOGLE_ALLOWED_DOMAIN",
+  n8n_enabled: "",
+  n8n_domain: "N8N_DOMAIN",
+  n8n_webhook_start_testing: "",
+  n8n_webhook_test_passed: "",
+  n8n_webhook_test_failed: "",
+  slack_enabled: "",
+  slack_bot_token: "SLACK_BOT_TOKEN",
+  slack_event_new_ticket: "",
+  slack_event_generate_test_cases: "",
+  slack_event_testing: "",
+  slack_event_test_passed: "",
+  slack_event_test_failed: "",
 };
 
 export type ConfigMap = Partial<Record<(typeof CONFIG_KEYS)[number], string>>;

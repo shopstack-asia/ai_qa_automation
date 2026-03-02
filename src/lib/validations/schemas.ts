@@ -41,6 +41,7 @@ export const createProjectSchema = z.object({
   name: z.string().min(1).max(255),
   jiraProjectKey: z.string().max(32).optional(),
   n8nWebhookToken: z.string().optional(),
+  slackChannelId: z.string().max(80).optional().nullable(),
   defaultExecutionStrategy: z.enum(["sequential", "parallel", "adaptive"]).optional(),
   isActive: z.boolean().optional(),
 });
