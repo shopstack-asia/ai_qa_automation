@@ -1,7 +1,8 @@
 /**
  * POST /api/ai/generate-test-case-from-ticket
  * Body: { ticketId: string }
- * Fetches prompts from Config, calls OpenAI with placeholder-injected user prompt, creates TestCase(s) with status ready, source AI.
+ * Two-step AI: scenario planner then per-scenario generation. Prompts from Config. Creates TestCase(s) with status READY, source AI.
+ * Returns { testCaseIds }; optional errors[] on partial failure.
  */
 
 import { NextRequest, NextResponse } from "next/server";

@@ -7,6 +7,7 @@ import { aiTestcaseQueue } from "../src/lib/queue/ai-testcase-queue";
 import { generateTestCaseFromTicket } from "../src/lib/ai/generate-test-case-from-ticket";
 import { getConfig } from "../src/lib/config";
 import { prisma } from "../src/lib/db/client";
+import { sendSlackNotification } from "../src/lib/slack/send-message";
 
 export function isSchemaValidationError(message: string): boolean {
   const lower = message.toLowerCase();
@@ -42,6 +43,16 @@ export async function processAITestcaseJob(
       where: { id: ticketId },
       data: { ai_status: "GENERATED" },
     });
+    const ticket = await prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { title: true, project: { select: { slackChannelId: true, name: true } } },
+    });
+    if (ticket?.project?.slackChannelId) {
+      sendSlackNotification("generate_test_cases", {
+        channelId: ticket.project.slackChannelId,
+        text: `Test cases generated for ticket: *${ticket.title}* (project: ${ticket.project.name})`,
+      }).catch(() => {});
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[ai-testcase-worker] Job failed:", job.id, message);

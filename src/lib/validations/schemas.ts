@@ -333,6 +333,23 @@ export const aiGeneratePlanSchema = z.object({
   projectId: z.string().cuid().optional(),
 });
 
+// ----- AI: scenario planner (step 1) response shape -----
+
+const scenarioPlannerItemSchema = z.object({
+  no: z.number().int().min(1),
+  title: z.string().min(1),
+  category: z.string().min(1), // e.g. FUNCTIONAL, SECURITY
+});
+
+export const scenarioPlannerResponseSchema = z.object({
+  application: z.string(),
+  allowed_types: z.array(z.string()),
+  scenarios: z.array(scenarioPlannerItemSchema).min(1),
+});
+
+export type ScenarioPlannerScenario = z.infer<typeof scenarioPlannerItemSchema>;
+export type ScenarioPlannerResponse = z.infer<typeof scenarioPlannerResponseSchema>;
+
 // ----- AI: generate test cases from ticket (response shape) -----
 
 export const aiGeneratedTestCaseItemSchema = z.object({

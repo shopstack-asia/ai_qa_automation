@@ -1,7 +1,9 @@
 /**
  * Generate test case(s) from a ticket using OpenAI.
- * Prompts are read from Config (openai_system_prompt, openai_user_prompt_template).
- * No hardcoded prompts; placeholders in user template are replaced with ticket/application data.
+ * Two-step architecture: (1) Scenario Planner → (2) Per-scenario test case generation → (3) Merge.
+ * Prompts are read from Config. No hardcoded prompts.
+ * - Planner step: openai_system_prompt + openai_user_prompt_template_scenario_planner (or openai_user_prompt_template if empty).
+ * - Per-scenario step: openai_system_prompt + openai_user_prompt_template with scenario context.
  */
 
 import OpenAI from "openai";
@@ -12,49 +14,71 @@ import { OPENAI_DEFAULT_MODEL } from "@/lib/config/openai-models";
 import { saveOpenAILog } from "@/lib/ai/openai-log";
 import {
   aiGeneratedTestCasesResponseSchema,
+  scenarioPlannerResponseSchema,
   type AIGeneratedTestCaseItem,
+  type ScenarioPlannerResponse,
+  type ScenarioPlannerScenario,
 } from "@/lib/validations/schemas";
 
-export type GenerateTestCaseFromTicketResult = { testCaseIds: string[] };
+export type GenerateTestCaseFromTicketResult = {
+  testCaseIds: string[];
+  errors?: string[];
+};
 
-/** Appended to user prompt so the model returns JSON that we can use to create TestCase records. */
-const OUTPUT_SCHEMA_SUFFIX = `
+const MAX_LENGTH_RETRIES = 2;
+
+/** Suffix for planner call: output only scenario index list (no full test case structure). */
+const PLANNER_OUTPUT_SUFFIX = `
 
 ========================
-OUTPUT FORMAT (STRICT JSON ONLY)
+OUTPUT FORMAT (STRICT JSON ONLY) — Scenario list only
 ========================
-Return ONLY valid JSON (no markdown fences, no extra text) using this schema:
+Return ONLY valid JSON (no markdown fences, no extra text). Do NOT generate full test cases.
 
 {
   "application": "{{application_name}}",
   "allowed_types": {{allowed_types}},
-  "test_cases": [
-    {
-      "test_type": "E2E or API (must be in allowed_types)",
-      "no": 1,
-      "title": "string",
-      "scenario": "string",
-      "objective": "string",
-      "category": "FUNCTIONAL|VALIDATION|SECURITY|ROLE_BASED|DATA_MASKING|EDGE_CASE",
-      "data_condition": "RECORD_MUST_EXIST|RECORD_MUST_NOT_EXIST|NO_DATA_DEPENDENCY",
-      "setup_hint": "string|null",
-      "data_requirement": [
-        {
-          "alias": "string (local variable name used in steps)",
-          "type": "UPPERCASE_STRING",
-          "scenario": "VALID|INVALID|EDGE|EMPTY",
-          "role": "UPPERCASE_STRING|null"
-        }
-      ],
-      "preconditions": ["string"],
-      "steps": [
-        "string (must use placeholder like {{alias.field}} if input is required and must NOT contain login/authentication steps)"
-      ],
-      "expected_results": ["string"]
-    }
+  "scenarios": [
+    { "no": 1, "title": "short scenario title", "category": "FUNCTIONAL|SECURITY|VALIDATION|..." }
   ]
 }
 `;
+
+/** Appended to user prompt when generating a single test case (per-scenario step). */
+const SINGLE_TEST_CASE_SUFFIX = `
+
+========================
+OUTPUT FORMAT (STRICT JSON ONLY) — One test case only
+========================
+Generate ONLY ONE test case for the given scenario. Return ONLY valid JSON (no markdown fences, no extra text):
+
+{
+  "test_type": "E2E or API (must be in allowed_types)",
+  "no": {{scenario_no}},
+  "title": "string",
+  "scenario": "string",
+  "objective": "string",
+  "category": "FUNCTIONAL|VALIDATION|SECURITY|ROLE_BASED|DATA_MASKING|EDGE_CASE",
+  "data_condition": "RECORD_MUST_EXIST|RECORD_MUST_NOT_EXIST|NO_DATA_DEPENDENCY",
+  "setup_hint": "string|null",
+  "data_requirement": [],
+  "preconditions": ["string"],
+  "steps": ["string (use {{alias.field}} if needed; no login/authentication steps)"],
+  "expected_results": ["string"]
+}
+`;
+
+function parseJsonFromRaw(raw: string): unknown {
+  const cleaned = raw.replace(/^```json\s*|\s*```$/g, "").trim();
+  return JSON.parse(cleaned);
+}
+
+function messagesForLog(messages: ChatCompletionMessageParam[]): Array<{ role: string; content: string }> {
+  return messages.map((m) => ({
+    role: m.role,
+    content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
+  }));
+}
 
 /** Extract raw test case array from parsed AI response (same logic as normalize). */
 function extractRawTestCases(parsed: unknown): unknown[] {
@@ -192,11 +216,163 @@ function normalizeAITestCaseItem(item: unknown): Record<string, unknown> {
   return out;
 }
 
+type TicketContext = {
+  title: string;
+  description: string | null;
+  acceptanceCriteria: string | null;
+  primaryActor: string | null;
+  projectId: string;
+  id: string;
+};
+
+function replaceTicketPlaceholders(
+  template: string,
+  ctx: { ticket: TicketContext; applicationName: string; allowedTypes: string[] }
+): string {
+  return template
+    .replace(/\{\{title\}\}/g, ctx.ticket.title)
+    .replace(/\{\{description\}\}/g, ctx.ticket.description ?? "")
+    .replace(/\{\{acceptance_criteria\}\}/g, ctx.ticket.acceptanceCriteria ?? "")
+    .replace(/\{\{application\}\}/g, ctx.applicationName)
+    .replace(/\{\{application_name\}\}/g, ctx.applicationName)
+    .replace(/\{\{allowed_test_types\}\}/g, JSON.stringify(ctx.allowedTypes))
+    .replace(/\{\{allowed_types\}\}/g, JSON.stringify(ctx.allowedTypes));
+}
+
+function replaceScenarioPlaceholders(
+  template: string,
+  scenario: ScenarioPlannerScenario
+): string {
+  return template
+    .replace(/\{\{scenario_no\}\}/g, String(scenario.no))
+    .replace(/\{\{scenario_title\}\}/g, scenario.title)
+    .replace(/\{\{scenario_category\}\}/g, scenario.category);
+}
+
+/** Step 1: Call OpenAI for scenario list only. Retries on finish_reason === "length". */
+async function callPlanner(
+  openai: OpenAI,
+  model: string,
+  systemPrompt: string,
+  plannerUserPrompt: string,
+  applicationName: string,
+  allowedTypes: string[]
+): Promise<ScenarioPlannerResponse> {
+  const suffix = PLANNER_OUTPUT_SUFFIX
+    .replace(/\{\{application_name\}\}/g, applicationName)
+    .replace(/\{\{allowed_types\}\}/g, JSON.stringify(allowedTypes));
+  const userContent = plannerUserPrompt.trim() + suffix;
+  const messages: ChatCompletionMessageParam[] = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userContent },
+  ];
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= MAX_LENGTH_RETRIES; attempt++) {
+    const extraInstruction = attempt > 0 ? "\n\nBe concise. Output only the JSON with minimal scenario titles." : "";
+    const finalContent = userContent + extraInstruction;
+    const msgs: ChatCompletionMessageParam[] = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: finalContent },
+    ];
+    const completion = await openai.chat.completions.create({
+      model,
+      messages: msgs,
+      max_tokens: attempt > 0 ? 1024 : 2048,
+      temperature: 0.2,
+    });
+    const raw = completion.choices[0]?.message?.content?.trim();
+    const finishReason = completion.choices[0]?.finish_reason;
+    if (finishReason === "length" && attempt < MAX_LENGTH_RETRIES) {
+      console.warn("[generate-test-case] Scenario planner response truncated (finish_reason=length), retrying with reduced verbosity");
+      lastError = new Error("Planner response truncated");
+      continue;
+    }
+    if (!raw) {
+      throw new Error(lastError?.message ?? "Empty planner response");
+    }
+    let parsed: unknown;
+    try {
+      parsed = parseJsonFromRaw(raw);
+    } catch {
+      throw new Error("Planner response is not valid JSON");
+    }
+    const result = scenarioPlannerResponseSchema.safeParse(parsed);
+    if (result.success) {
+      await saveOpenAILog({
+        source: "generate-test-case-from-ticket",
+        request: { model, messages: messagesForLog(msgs), max_tokens: attempt > 0 ? 1024 : 2048, temperature: 0.2 },
+        response: JSON.parse(JSON.stringify(completion)),
+      });
+      return result.data;
+    }
+    lastError = new Error(`Planner response invalid: ${result.error.message}`);
+  }
+  throw lastError ?? new Error("Planner step failed");
+}
+
+/** Step 2: Generate one test case for a scenario. Retries on finish_reason === "length". */
+async function callGenerateOneTestCase(
+  openai: OpenAI,
+  model: string,
+  systemPrompt: string,
+  userTemplate: string,
+  scenario: ScenarioPlannerScenario,
+  ctx: { ticket: TicketContext; applicationName: string; allowedTypes: string[] }
+): Promise<{ item: AIGeneratedTestCaseItem; rawItem: Record<string, unknown> } | null> {
+  const baseUser = replaceTicketPlaceholders(userTemplate, ctx);
+  const withScenario = replaceScenarioPlaceholders(baseUser, scenario);
+  const suffix = SINGLE_TEST_CASE_SUFFIX.replace(/\{\{scenario_no\}\}/g, String(scenario.no));
+  const userContent = withScenario.trim() + suffix;
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= MAX_LENGTH_RETRIES; attempt++) {
+    const extraInstruction = attempt > 0 ? "\n\nBe concise. Output only the single test case JSON." : "";
+    const finalContent = userContent + extraInstruction;
+    const msgs: ChatCompletionMessageParam[] = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: finalContent },
+    ];
+    const completion = await openai.chat.completions.create({
+      model,
+      messages: msgs,
+      max_tokens: attempt > 0 ? 2048 : 4096,
+      temperature: 0.2,
+    });
+    const raw = completion.choices[0]?.message?.content?.trim();
+    const finishReason = completion.choices[0]?.finish_reason;
+    if (finishReason === "length" && attempt < MAX_LENGTH_RETRIES) {
+      console.warn("[generate-test-case] Per-scenario response truncated (finish_reason=length), retrying", { scenarioNo: scenario.no });
+      lastError = new Error("Per-scenario response truncated");
+      continue;
+    }
+    if (!raw) {
+      return null;
+    }
+    let parsed: unknown;
+    try {
+      parsed = parseJsonFromRaw(raw);
+    } catch {
+      return null;
+    }
+    const rawItems = extractRawTestCases(parsed);
+    const singleRaw = (rawItems[0] ?? parsed) as Record<string, unknown>;
+    const normalized = normalizeAITestCasesResponse(Array.isArray(parsed) ? { test_cases: parsed } : parsed);
+    if (normalized.testCases.length === 0) return null;
+    const validated = aiGeneratedTestCasesResponseSchema.safeParse({ testCases: normalized.testCases });
+    if (!validated.success) return null;
+    await saveOpenAILog({
+      source: "generate-test-case-from-ticket",
+      request: { model, messages: messagesForLog(msgs), max_tokens: attempt > 0 ? 2048 : 4096, temperature: 0.2 },
+      response: JSON.parse(JSON.stringify(completion)),
+    });
+    return { item: validated.data.testCases[0], rawItem: singleRaw };
+  }
+  return null;
+}
+
 /**
- * Fetch ticket, application, config; build user prompt from template; call OpenAI; create TestCase records.
+ * Fetch ticket, application, config; run 2-step AI (planner → per-scenario generation); create TestCase records.
  * - If config prompts are missing → throws.
- * - Expects strict JSON from OpenAI (single or multiple test cases).
- * - Creates records with status "READY", source "AI".
+ * - Preserves API contract: returns { testCaseIds }; optional errors[] on partial failure.
  */
 export async function generateTestCaseFromTicket(
   ticketId: string,
@@ -242,6 +418,15 @@ export async function generateTestCaseFromTicket(
 
   const config = await getConfig();
   const model = config.openai_model || process.env.OPENAI_MODEL || OPENAI_DEFAULT_MODEL;
+  const ticketContext: TicketContext = {
+    title: ticket.title,
+    description: ticket.description ?? null,
+    acceptanceCriteria: ticket.acceptanceCriteria ?? null,
+    primaryActor: ticket.primaryActor ?? null,
+    projectId: ticket.projectId,
+    id: ticket.id,
+  };
+  const ctx = { ticket: ticketContext, applicationName, allowedTypes };
   let requestMessages: ChatCompletionMessageParam[] | null = null;
   let completion: Awaited<ReturnType<OpenAI["chat"]["completions"]["create"]>> | null = null;
 
@@ -253,6 +438,8 @@ export async function generateTestCaseFromTicket(
 
     const systemPrompt = (config.openai_system_prompt ?? "").trim();
     const userTemplate = (config.openai_user_prompt_template ?? "").trim();
+    const plannerTemplateRaw = (config.openai_user_prompt_template_scenario_planner ?? "").trim();
+    const plannerTemplate = plannerTemplateRaw || userTemplate;
     if (!systemPrompt) {
       throw new Error(
         "Go to Config → OpenAI and set \"System prompt for generate test case\" (and \"User prompt template for generate test case\"), then Save."
@@ -264,76 +451,51 @@ export async function generateTestCaseFromTicket(
       );
     }
 
-    const userPrompt =
-      userTemplate
-        .replace(/\{\{title\}\}/g, ticket.title)
-        .replace(/\{\{description\}\}/g, ticket.description ?? "")
-        .replace(/\{\{acceptance_criteria\}\}/g, ticket.acceptanceCriteria ?? "")
-        .replace(/\{\{application\}\}/g, applicationName)
-        .replace(/\{\{application_name\}\}/g, applicationName)
-        .replace(/\{\{allowed_test_types\}\}/g, JSON.stringify(allowedTypes))
-        .replace(/\{\{allowed_types\}\}/g, JSON.stringify(allowedTypes))
-        .trim() + OUTPUT_SCHEMA_SUFFIX;
-
-    requestMessages = [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ];
-
     const openai = new OpenAI({ apiKey });
-    completion = await openai.chat.completions.create({
+
+    // Step 1 — Scenario Planner
+    const plannerUserPrompt = replaceTicketPlaceholders(plannerTemplate, ctx);
+    const plannerResponse = await callPlanner(
+      openai,
       model,
-      messages: requestMessages,
-      max_tokens: 4096,
-      temperature: 0.2,
-    });
-    
+      systemPrompt,
+      plannerUserPrompt,
+      applicationName,
+      allowedTypes
+    );
 
-    const raw = completion.choices[0]?.message?.content?.trim();
-    if (!raw) {
-      throw new Error("Empty AI response");
-    }
-
-    let parsed: unknown;
-    try {
-      const cleaned = raw.replace(/^```json\s*|\s*```$/g, "").trim();
-      parsed = JSON.parse(cleaned);
-    } catch {
-      throw new Error("AI response is not valid JSON");
-    }
-
-    const normalized = normalizeAITestCasesResponse(parsed);
-    console.log("normalized", normalized);
-    const toValidate = { testCases: normalized.testCases };
-    const validated = aiGeneratedTestCasesResponseSchema.safeParse(toValidate);
-    if (!validated.success) {
-      if (normalized.testCases.length === 0) {
-        throw new Error(
-          "AI did not return any test cases. Expected JSON with key testCases, test_cases, or an array of objects with title."
-        );
+    // Step 2 — Per-scenario test case generation
+    const items: AIGeneratedTestCaseItem[] = [];
+    const rawItems: Record<string, unknown>[] = [];
+    const errors: string[] = [];
+    for (const scenario of plannerResponse.scenarios) {
+      const result = await callGenerateOneTestCase(
+        openai,
+        model,
+        systemPrompt,
+        userTemplate,
+        scenario,
+        ctx
+      );
+      if (result) {
+        items.push(result.item);
+        rawItems.push(result.rawItem);
+      } else {
+        errors.push(`Scenario ${scenario.no}: ${scenario.title} — generation failed after retries`);
       }
+    }
+
+    if (items.length === 0) {
       throw new Error(
-        `AI response shape invalid: ${validated.error.message}`
+        errors.length ? errors.join("; ") : "No test cases generated"
       );
     }
 
-    const logRequest = {
-      model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      max_tokens: 4096,
-      temperature: 0.2,
-    };
-    await saveOpenAILog({
-      source: "generate-test-case-from-ticket",
-      request: logRequest,
-      response: JSON.parse(JSON.stringify(completion)),
-    });
-
-    const items: AIGeneratedTestCaseItem[] = validated.data.testCases;
-    const rawItems = extractRawTestCases(parsed);
+    const toValidate = { testCases: items };
+    const validated = aiGeneratedTestCasesResponseSchema.safeParse(toValidate);
+    if (!validated.success) {
+      throw new Error(`AI response shape invalid: ${validated.error.message}`);
+    }
 
     const testCaseIds: string[] = [];
     const priorityMap: Record<string, "CRITICAL" | "HIGH" | "MEDIUM" | "LOW"> = {
@@ -348,11 +510,9 @@ export async function generateTestCaseFromTicket(
     };
     const testTypeMap = { API: "API" as const, E2E: "E2E" as const };
 
-    for (let i = 0; i < items.length; i++) {
-      
-      const item = items[i];
-      console.log(item);
-      const raw = (rawItems[i] ?? {}) as Record<string, unknown>;
+    for (let i = 0; i < validated.data.testCases.length; i++) {
+      const item = validated.data.testCases[i];
+      const raw = rawItems[i] ?? {};
       const rawDr = raw.data_requirement ?? raw.dataRequirement;
       const dataReq: object[] =
         Array.isArray(rawDr) && rawDr.length > 0
@@ -360,7 +520,6 @@ export async function generateTestCaseFromTicket(
           : Array.isArray(item.data_requirement) && item.data_requirement.length > 0
             ? (item.data_requirement as object[])
             : [];
-      console.log(dataReq);            
 
       const priority = item.priority && priorityMap[item.priority] ? priorityMap[item.priority] : "MEDIUM";
       const testType =
@@ -407,7 +566,7 @@ export async function generateTestCaseFromTicket(
       testCaseIds.push(tc.id);
     }
 
-    return { testCaseIds };
+    return { testCaseIds, errors: errors.length > 0 ? errors : undefined };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const logRequest = requestMessages

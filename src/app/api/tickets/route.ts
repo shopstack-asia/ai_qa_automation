@@ -12,6 +12,7 @@ import { prisma } from "@/lib/db/client";
 import { getConfig } from "@/lib/config";
 import { createTicketSchema } from "@/lib/validations/schemas";
 import { enqueueAITestcaseJob } from "@/lib/queue/ai-testcase-queue";
+import { sendSlackNotification } from "@/lib/slack/send-message";
 
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;
@@ -131,6 +132,18 @@ export const POST = withApiKeyLogging(PERMISSIONS.CREATE_TEST_CASES, async (req,
       primaryActor: parsed.data.primaryActor ?? null,
     },
   });
+
+  // Slack: New ticket notification (fire-and-forget; do not fail request)
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { slackChannelId: true, name: true },
+  });
+  if (project?.slackChannelId) {
+    sendSlackNotification("new_ticket", {
+      channelId: project.slackChannelId,
+      text: `New ticket: *${ticket.title}*${ticket.externalId ? ` (${ticket.externalId})` : ""}\nProject: ${project.name}\nStatus: ${ticket.status}`,
+    }).catch(() => {});
+  }
 
   let payload: Record<string, unknown> = { ...ticket };
   if (isApiKeyAuth) {

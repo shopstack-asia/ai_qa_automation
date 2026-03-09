@@ -14,6 +14,7 @@ export const CONFIG_KEYS = [
   "openai_model",
   "openai_system_prompt",
   "openai_user_prompt_template",
+  "openai_user_prompt_template_scenario_planner",
   "ai_testcase_max_retry",
   "ai_queue_enabled",
   "scheduler_interval_ms",

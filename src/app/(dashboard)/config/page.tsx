@@ -24,6 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { CONFIG_KEYS, MASKED_VALUE, SENSITIVE_KEYS, N8N_WEBHOOK_EVENT_KEYS, SLACK_EVENT_KEYS } from "@/lib/config/constants";
 import { OPENAI_ALL_MODEL_IDS, OPENAI_MODEL_GROUPS } from "@/lib/config/openai-models";
 import { PROMPT_TEMPLATE_VARIABLES } from "@/lib/ai/prompt-template-variables";
@@ -104,6 +105,7 @@ const LABELS: Record<string, string> = {
   openai_model: "OpenAI model",
   openai_system_prompt: "System prompt for generate test case",
   openai_user_prompt_template: "User prompt template for generate test case",
+  openai_user_prompt_template_scenario_planner: "User prompt template for Scenario Planner",
   ai_testcase_max_retry: "AI test case generation max retry",
   ai_queue_enabled: "AI queue enabled (true/false)",
   scheduler_interval_ms: "Scheduler tick interval (ms)",
@@ -149,6 +151,7 @@ const SECTIONS: { title: string; description?: string; keys: readonly string[] }
     keys: [
       "openai_api_key",
       "openai_model",
+      "openai_user_prompt_template_scenario_planner",
       "openai_system_prompt",
       "openai_user_prompt_template",
     ],
@@ -200,7 +203,7 @@ const SECTIONS: { title: string; description?: string; keys: readonly string[] }
   },
   {
     title: "Slack",
-    description: "Send messages via Slack API (chat.postMessage). Use a Slack App Bot Token (xoxb-...). Channel is set per project (Project → Edit → Slack Channel ID).",
+    description: "Send messages via Slack API (chat.postMessage). Use a Slack App Bot Token (xoxb-...).",
     keys: [
       "slack_enabled",
       "slack_bot_token",
@@ -211,6 +214,26 @@ const SECTIONS: { title: string; description?: string; keys: readonly string[] }
       "slack_event_test_failed",
     ],
   },
+];
+
+/** Tab id → which sections and special cards to show */
+const CONFIG_TABS: {
+  id: string;
+  label: string;
+  sectionTitles: string[];
+  showSchedulesCard?: boolean;
+  showApiKeysCard?: boolean;
+  showPlatformsCard?: boolean;
+}[] = [
+  { id: "execute", label: "Execute", sectionTitles: ["Execution", "AI Queue"] },
+  { id: "openai", label: "OpenAI", sectionTitles: ["OpenAI"] },
+  { id: "scheduler", label: "Scheduler", sectionTitles: ["Scheduler"], showSchedulesCard: true },
+  { id: "s3", label: "S3 Config", sectionTitles: ["S3 Configuration"] },
+  { id: "google", label: "Google OAuth", sectionTitles: ["Google OAuth"] },
+  { id: "n8n", label: "N8N", sectionTitles: ["N8N"] },
+  { id: "slack", label: "Slack", sectionTitles: ["Slack"] },
+  { id: "api-key", label: "API Key", sectionTitles: [], showApiKeysCard: true },
+  { id: "platforms", label: "Platforms", sectionTitles: [], showPlatformsCard: true },
 ];
 
 interface ProjectOption {
@@ -227,6 +250,8 @@ export default function ConfigPage() {
   const [loading, setLoading] = useState(true);
   const [savingSection, setSavingSection] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(null);
+  /** Section title for which the current message applies (show message next to that section's Save button). */
+  const [messageSection, setMessageSection] = useState<string | null>(null);
 
   const [scheduleDrawerOpen, setScheduleDrawerOpen] = useState(false);
   const [projects, setProjects] = useState<ProjectOption[]>([]);
@@ -411,9 +436,11 @@ export default function ConfigPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
+      setMessageSection("Platform list (master)");
       setMessage({ type: "ok", text: "Platform list saved." });
       toast.success("Save successful");
     } catch (err) {
+      setMessageSection("Platform list (master)");
       setMessage({ type: "error", text: err instanceof Error ? err.message : "Failed to save platform list" });
     } finally {
       setPlatformSaving(false);
@@ -469,6 +496,9 @@ export default function ConfigPage() {
     }
   };
 
+  /** Keys that may be explicitly saved as empty (e.g. optional prompt = use fallback). */
+  const KEYS_ALLOW_EMPTY = ["openai_user_prompt_template_scenario_planner"] as const;
+
   const handleSaveSection = async (sectionTitle: string, keys: readonly string[]) => {
     setMessage(null);
     setSavingSection(sectionTitle);
@@ -476,7 +506,8 @@ export default function ConfigPage() {
     const includeEmpty = sectionTitle === "N8N" || sectionTitle === "Slack";
     for (const key of keys) {
       const value = config[key] ?? "";
-      if (!includeEmpty && (value === "" || value === MASKED_VALUE)) continue;
+      const allowEmpty = KEYS_ALLOW_EMPTY.includes(key as (typeof KEYS_ALLOW_EMPTY)[number]);
+      if (!includeEmpty && !allowEmpty && (value === "" || value === MASKED_VALUE)) continue;
       const isSensitive = SENSITIVE_KEYS.includes(key as (typeof SENSITIVE_KEYS)[number]);
       if (isSensitive && value === MASKED_VALUE) continue;
       payload[key] = value;
@@ -489,6 +520,7 @@ export default function ConfigPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
+      setMessageSection(sectionTitle);
       setMessage({
         type: "ok",
         text: data.updated != null ? `${sectionTitle} saved (${data.updated} setting(s)).` : `${sectionTitle} saved.`,
@@ -497,6 +529,7 @@ export default function ConfigPage() {
       const getRes = await fetch("/api/config");
       if (getRes.ok) setConfig(await getRes.json());
     } catch (err) {
+      setMessageSection(sectionTitle);
       setMessage({
         type: "error",
         text: err instanceof Error ? err.message : "Failed to save config",
@@ -521,20 +554,19 @@ export default function ConfigPage() {
         subtitle="System settings and schedule configuration (admin)."
       />
 
-      {message && (
-        <p
-          className={
-            message.type === "ok"
-              ? "text-sm font-medium text-success"
-              : "text-sm font-medium text-destructive"
-          }
-        >
-          {message.text}
-        </p>
-      )}
+      <Tabs defaultValue="execute" className="w-full">
+        <TabsList className="flex flex-wrap h-auto gap-1 p-2 bg-elevated/50 w-full">
+          {CONFIG_TABS.map((tab) => (
+            <TabsTrigger key={tab.id} value={tab.id}>
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      {SECTIONS.map((section) => (
-        <Card key={section.title}>
+        {CONFIG_TABS.map((tab) => (
+          <TabsContent key={tab.id} value={tab.id} className="space-y-8 mt-4">
+            {SECTIONS.filter((s) => tab.sectionTitles.includes(s.title)).map((section) => (
+              <Card key={section.title}>
           <CardHeader className="flex flex-row items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <CardTitle>{section.title}</CardTitle>
@@ -542,16 +574,39 @@ export default function ConfigPage() {
                 <CardDescription className="mt-1">{section.description}</CardDescription>
               )}
             </div>
-            <Button
-              type="button"
-              size="sm"
-              disabled={savingSection !== null}
-              onClick={() => handleSaveSection(section.title, section.keys)}
-            >
-              {savingSection === section.title ? "Saving…" : "Save"}
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              {message && messageSection === section.title && (
+                <p
+                  className={
+                    message.type === "ok"
+                      ? "text-sm font-medium text-success"
+                      : "text-sm font-medium text-destructive"
+                  }
+                >
+                  {message.text}
+                </p>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                disabled={savingSection !== null}
+                onClick={() => handleSaveSection(section.title, section.keys)}
+              >
+                {savingSection === section.title ? "Saving…" : "Save"}
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-5">
+            {section.title === "Slack" && (
+              <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                <strong className="text-foreground">Channel is set per project:</strong> Go to{" "}
+                <span className="font-medium text-foreground">Projects</span> → select a project → <span className="font-medium text-foreground">Edit</span> → set{" "}
+                <span className="font-medium text-foreground">Slack Channel ID</span> (e.g. channel ID <code className="rounded bg-muted px-1">C01234ABCD</code> or channel name <code className="rounded bg-muted px-1">#sales_demo</code>). If not set, that project will not send notifications to Slack.
+              </div>
+            )}
+            {(() => {
+              const mainContent = (
+                <>
             {section.keys.map((key) => {
               const isSensitive = SENSITIVE_KEYS.includes(
                 key as (typeof SENSITIVE_KEYS)[number]
@@ -633,6 +688,17 @@ export default function ConfigPage() {
                         {(current || "true").toLowerCase() === "true" ? "Enabled" : "Disabled"}
                       </span>
                     </div>
+                  ) : key === "ai_queue_enabled" ? (
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id={key}
+                        checked={(current || "true").toLowerCase() === "true"}
+                        onCheckedChange={(checked) => handleChange(key, checked ? "true" : "false")}
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        {(current || "true").toLowerCase() === "true" ? "Enabled" : "Disabled"}
+                      </span>
+                    </div>
                   ) : key === "n8n_enabled" ? (
                     <div className="flex items-center gap-2">
                       <Switch
@@ -691,7 +757,7 @@ export default function ConfigPage() {
                         </p>
                       )}
                     </div>
-                  ) : key === "openai_system_prompt" || key === "openai_user_prompt_template" ? (
+                  ) : key === "openai_system_prompt" || key === "openai_user_prompt_template" || key === "openai_user_prompt_template_scenario_planner" ? (
                     <div className="space-y-2">
                       <textarea
                         id={key}
@@ -701,18 +767,10 @@ export default function ConfigPage() {
                         placeholder="Enter prompt text…"
                         className="w-full max-w-xl min-h-[6rem] resize-y rounded-md border border-border bg-elevated px-3 py-2 text-sm text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-0 placeholder:text-muted"
                       />
-                      {key === "openai_user_prompt_template" && (
-                        <div className="rounded-md border border-border/50 bg-transparent px-3 py-2.5 text-sm">
-                          <p className="font-medium text-foreground mb-2">Variables (use in template):</p>
-                          <ul className="space-y-1.5 text-foreground">
-                            {PROMPT_TEMPLATE_VARIABLES.map((v) => (
-                              <li key={v.name}>
-                                <code className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-foreground">{v.name}</code>
-                                <span className="ml-2 text-foreground/90">{v.description}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
+                      {key === "openai_user_prompt_template_scenario_planner" && (
+                        <p className="text-xs text-muted-foreground">
+                          Used only for the scenario planning step. Same variables as above. If empty, the user prompt template for generate test case is used.
+                        </p>
                       )}
                     </div>
                   ) : (
@@ -769,199 +827,239 @@ export default function ConfigPage() {
                 </p>
               </div>
             )}
+                </>
+              );
+              return section.title === "OpenAI" ? (
+                <div className="flex gap-6 items-start">
+                  <div className="flex-1 min-w-0 space-y-5">{mainContent}</div>
+                  <div className="shrink-0 w-72 self-start rounded-md border border-border/50 bg-transparent px-3 py-2.5 text-sm">
+                    <p className="font-medium text-foreground mb-2">Variables (use in template):</p>
+                    <ul className="space-y-1.5 text-foreground">
+                      {PROMPT_TEMPLATE_VARIABLES.map((v) => (
+                        <li key={v.name}>
+                          <code className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-foreground">{v.name}</code>
+                          <span className="ml-2 text-foreground/90">{v.description}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              ) : (
+                mainContent
+              );
+            })()}
           </CardContent>
         </Card>
       ))}
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Platform list (master)</CardTitle>
-            <CardDescription>
-              Options shown in test case &quot;Platform&quot; dropdown. Add items then Save.
-            </CardDescription>
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            disabled={platformSaving}
-            onClick={savePlatforms}
-          >
-            {platformSaving ? "Saving…" : "Save"}
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-2">
-            <Input
-              value={newPlatform}
-              onChange={(e) => setNewPlatform(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addPlatform())}
-              placeholder="New platform name"
-              className="max-w-xs"
-            />
-            <Button type="button" variant="secondary" size="sm" onClick={addPlatform}>
-              Add
-            </Button>
-          </div>
-          <ul className="space-y-2">
-            {platforms.length === 0 ? (
-              <li className="text-sm text-muted-foreground">No platforms. Add one above.</li>
-            ) : (
-              platforms.map((p, i) => (
-                <li key={`${p.name}-${i}`} className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-elevated/30 px-3 py-2 text-sm">
-                  <span className="min-w-[120px] text-foreground">{p.name}</span>
-                  <span className="text-muted-foreground">Test type:</span>
-                  <div className="flex gap-4">
-                    {TEST_TYPE_OPTIONS.map((opt) => (
-                      <label key={opt} className="flex cursor-pointer items-center gap-1.5">
-                        <input
-                          type="checkbox"
-                          checked={p.testTypes.includes(opt)}
-                          onChange={(e) => {
-                            const next = e.target.checked
-                              ? [...p.testTypes, opt]
-                              : p.testTypes.filter((t) => t !== opt);
-                            setPlatformTestTypes(i, next.length ? next : [...TEST_TYPE_OPTIONS]);
-                          }}
-                          className="h-3.5 w-3.5 rounded border-border"
-                        />
-                        <span>{opt}</span>
-                      </label>
-                    ))}
+            {tab.showPlatformsCard && (
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <CardTitle>Platform list (master)</CardTitle>
+                    <CardDescription>
+                      Options shown in test case &quot;Platform&quot; dropdown. Add items then Save.
+                    </CardDescription>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="ml-auto text-muted-foreground hover:text-destructive"
-                    onClick={() => removePlatform(i)}
-                  >
-                    Remove
-                  </Button>
-                </li>
-              ))
-            )}
-          </ul>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>API Keys</CardTitle>
-            <CardDescription>
-              Manage API keys for N8N or other integrations. Each key has a name and secret; use the key as Bearer token when calling this platform. Key is shown only once when created.
-            </CardDescription>
-          </div>
-          <Button size="sm" onClick={openApiKeyDrawer}>
-            Add
-          </Button>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Key</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="w-[80px]"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {apiKeys.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
-                    No API keys. Add one for N8N or external integration.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                apiKeys.map((k) => (
-                  <TableRow key={k.id}>
-                    <TableCell className="font-medium">{k.name}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{k.key}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {new Date(k.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="text-muted-foreground hover:text-destructive"
-                        onClick={() => deleteApiKey(k.id)}
-                      >
-                        Revoke
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Schedules</CardTitle>
-            <CardDescription>
-              Set up recurring test runs by project and environment.
-            </CardDescription>
-          </div>
-          <Button size="sm" onClick={openScheduleDrawer}>
-            Create schedule
-          </Button>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Project</TableHead>
-                <TableHead>Environments</TableHead>
-                <TableHead>Cron</TableHead>
-                <TableHead>Next run</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {schedules.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
-                    No schedules yet. Create one to run tests on a schedule.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                schedules.map((s) => (
-                  <TableRow key={s.id}>
-                    <TableCell className="font-medium">{s.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{s.project?.name ?? "—"}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {s.environments?.length ? s.environments.map((e) => e.name).join(", ") : "—"}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{s.cronExpression}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {s.nextRunAt ? new Date(s.nextRunAt).toLocaleString() : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <span
+                  <div className="flex items-center gap-2 shrink-0">
+                    {message && messageSection === "Platform list (master)" && (
+                      <p
                         className={
-                          s.isActive
-                            ? "text-sm text-success"
-                            : "text-sm text-muted-foreground"
+                          message.type === "ok"
+                            ? "text-sm font-medium text-success"
+                            : "text-sm font-medium text-destructive"
                         }
                       >
-                        {s.isActive ? "Active" : "Inactive"}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                        {message.text}
+                      </p>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={platformSaving}
+                      onClick={savePlatforms}
+                    >
+                      {platformSaving ? "Saving…" : "Save"}
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-2">
+                    <Input
+                      value={newPlatform}
+                      onChange={(e) => setNewPlatform(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addPlatform())}
+                      placeholder="New platform name"
+                      className="max-w-xs"
+                    />
+                    <Button type="button" variant="secondary" size="sm" onClick={addPlatform}>
+                      Add
+                    </Button>
+                  </div>
+                  <ul className="space-y-2">
+                    {platforms.length === 0 ? (
+                      <li className="text-sm text-muted-foreground">No platforms. Add one above.</li>
+                    ) : (
+                      platforms.map((p, i) => (
+                        <li key={`${p.name}-${i}`} className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-elevated/30 px-3 py-2 text-sm">
+                          <span className="min-w-[120px] text-foreground">{p.name}</span>
+                          <span className="text-muted-foreground">Test type:</span>
+                          <div className="flex gap-4">
+                            {TEST_TYPE_OPTIONS.map((opt) => (
+                              <label key={opt} className="flex cursor-pointer items-center gap-1.5">
+                                <input
+                                  type="checkbox"
+                                  checked={p.testTypes.includes(opt)}
+                                  onChange={(e) => {
+                                    const next = e.target.checked
+                                      ? [...p.testTypes, opt]
+                                      : p.testTypes.filter((t) => t !== opt);
+                                    setPlatformTestTypes(i, next.length ? next : [...TEST_TYPE_OPTIONS]);
+                                  }}
+                                  className="h-3.5 w-3.5 rounded border-border"
+                                />
+                                <span>{opt}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="ml-auto text-muted-foreground hover:text-destructive"
+                            onClick={() => removePlatform(i)}
+                          >
+                            Remove
+                          </Button>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
+            {tab.showApiKeysCard && (
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>API Keys</CardTitle>
+                    <CardDescription>
+                      Manage API keys for N8N or other integrations. Each key has a name and secret; use the key as Bearer token when calling this platform. Key is shown only once when created.
+                    </CardDescription>
+                  </div>
+                  <Button size="sm" onClick={openApiKeyDrawer}>
+                    Add
+                  </Button>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Key</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead className="w-[80px]"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {apiKeys.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="py-8 text-center text-sm text-muted-foreground">
+                            No API keys. Add one for N8N or external integration.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        apiKeys.map((k) => (
+                          <TableRow key={k.id}>
+                            <TableCell className="font-medium">{k.name}</TableCell>
+                            <TableCell className="font-mono text-xs text-muted-foreground">{k.key}</TableCell>
+                            <TableCell className="text-muted-foreground text-sm">
+                              {new Date(k.createdAt).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-muted-foreground hover:text-destructive"
+                                onClick={() => deleteApiKey(k.id)}
+                              >
+                                Revoke
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+            {tab.showSchedulesCard && (
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Schedules</CardTitle>
+                    <CardDescription>
+                      Set up recurring test runs by project and environment.
+                    </CardDescription>
+                  </div>
+                  <Button size="sm" onClick={openScheduleDrawer}>
+                    Create schedule
+                  </Button>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Project</TableHead>
+                        <TableHead>Environments</TableHead>
+                        <TableHead>Cron</TableHead>
+                        <TableHead>Next run</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {schedules.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
+                            No schedules yet. Create one to run tests on a schedule.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        schedules.map((s) => (
+                          <TableRow key={s.id}>
+                            <TableCell className="font-medium">{s.name}</TableCell>
+                            <TableCell className="text-muted-foreground">{s.project?.name ?? "—"}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {s.environments?.length ? s.environments.map((e) => e.name).join(", ") : "—"}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">{s.cronExpression}</TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {s.nextRunAt ? new Date(s.nextRunAt).toLocaleString() : "—"}
+                            </TableCell>
+                            <TableCell>
+                              <span
+                                className={
+                                  s.isActive
+                                    ? "text-sm text-success"
+                                    : "text-sm text-muted-foreground"
+                                }
+                              >
+                                {s.isActive ? "Active" : "Inactive"}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        ))}
+      </Tabs>
 
       <Sheet open={apiKeyDrawerOpen} onOpenChange={setApiKeyDrawerOpen}>
         <SheetContent side="right">

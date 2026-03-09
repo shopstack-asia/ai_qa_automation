@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withApiKeyLogging } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db/client";
+import { sendSlackNotification } from "@/lib/slack/send-message";
 import { importTicketsSchema } from "@/lib/validations/schemas";
 
 export const POST = withApiKeyLogging(PERMISSIONS.CREATE_TEST_CASES, async (req) => {
@@ -32,6 +33,17 @@ export const POST = withApiKeyLogging(PERMISSIONS.CREATE_TEST_CASES, async (req)
       })
     )
   );
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { slackChannelId: true, name: true },
+  });
+  if (project?.slackChannelId && created.length > 0) {
+    sendSlackNotification("new_ticket", {
+      channelId: project.slackChannelId,
+      text: `${created.length} ticket(s) imported in *${project.name}*: ${created.map((c) => c.title).slice(0, 5).join(", ")}${created.length > 5 ? "…" : ""}`,
+    }).catch(() => {});
+  }
 
   return NextResponse.json({ created: created.length, ids: created.map((c) => c.id) });
 });

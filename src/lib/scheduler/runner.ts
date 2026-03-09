@@ -12,6 +12,7 @@ import { decrypt } from "@/lib/encryption";
 import { runPreExecution } from "@/core/pre-execution-service";
 import type { ApplicationConfig } from "@/core/data-orchestrator";
 import type { AgentExecution } from "@/lib/agent-execution-types";
+import { sendSlackNotification } from "@/lib/slack/send-message";
 
 export async function getScheduleConfig(key: string): Promise<number | null> {
   const row = await prisma.systemConfig.findUnique({
@@ -314,6 +315,26 @@ export async function runRunCreator(): Promise<void> {
         }
       }
 
+      if (created.length > 0) {
+        const run = await prisma.testRun.findFirst({
+          where: { projectId, status: "RUNNING", completedAt: null },
+          orderBy: { startedAt: "desc" },
+          select: { id: true },
+        });
+        const project = run
+          ? await prisma.project.findUnique({
+              where: { id: projectId },
+              select: { slackChannelId: true, name: true },
+            })
+          : null;
+        if (project?.slackChannelId) {
+          sendSlackNotification("testing", {
+            channelId: project.slackChannelId,
+            text: `Test run started for *${project.name}* (${created.length} test case(s)).`,
+          }).catch(() => {});
+        }
+      }
+
       await updateScheduleNextRun(schedule.id, now);
     } catch (err) {
       console.error("[run-creator] Schedule error:", schedule.id, err);
@@ -372,6 +393,8 @@ export async function runRunOrchestrator(): Promise<void> {
         where: { runId, status: { in: ["PASSED", "FAILED"] } },
         select: { testCaseId: true, status: true },
       });
+      const passedCount = executions.filter((e) => e.status === "PASSED").length;
+      const failedCount = executions.filter((e) => e.status === "FAILED").length;
       for (const ex of executions) {
         await prisma.testCase.updateMany({
           where: { id: ex.testCaseId, status: "TESTING" },
@@ -382,6 +405,23 @@ export async function runRunOrchestrator(): Promise<void> {
         where: { id: runId },
         data: { status: "COMPLETED", completedAt: new Date() },
       });
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { slackChannelId: true, name: true },
+      });
+      if (project?.slackChannelId) {
+        if (failedCount === 0) {
+          sendSlackNotification("test_passed", {
+            channelId: project.slackChannelId,
+            text: `Test run completed for *${project.name}*: all ${passedCount} test(s) passed.`,
+          }).catch(() => {});
+        } else {
+          sendSlackNotification("test_failed", {
+            channelId: project.slackChannelId,
+            text: `Test run completed for *${project.name}*: ${passedCount} passed, ${failedCount} failed.`,
+          }).catch(() => {});
+        }
+      }
     } catch (err) {
       console.error("[run-orchestrator] Run error:", run.id, err);
     }
