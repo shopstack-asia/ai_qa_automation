@@ -125,9 +125,15 @@ export async function DELETE(
   const { id } = await params;
   const testCase = await prisma.testCase.findUnique({
     where: { id },
-    select: { id: true, ticketId: true },
+    select: { id: true, ticketId: true, status: true },
   });
   if (!testCase) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (testCase.status !== "CANCEL" && testCase.status !== "IGNORE") {
+    return NextResponse.json(
+      { error: "Test case can only be deleted when status is CANCEL or IGNORE" },
+      { status: 400 }
+    );
+  }
 
   const ticketId = testCase.ticketId;
 

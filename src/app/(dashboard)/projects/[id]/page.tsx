@@ -3172,16 +3172,18 @@ export default function ProjectDetailPage() {
                                 Cancel
                               </button>
                             )}
-                            <button
-                              type="button"
-                              className="w-full px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 rounded-lg"
-                              onClick={() => {
-                                setTcActionDropdownId(null);
-                                setTcConfirmDeleteId(tc.id);
-                              }}
-                            >
-                              Delete
-                            </button>
+                            {(tc.status === "CANCEL" || tc.status === "IGNORE") && (
+                              <button
+                                type="button"
+                                className="w-full px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 rounded-lg"
+                                onClick={() => {
+                                  setTcActionDropdownId(null);
+                                  setTcConfirmDeleteId(tc.id);
+                                }}
+                              >
+                                Delete
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
