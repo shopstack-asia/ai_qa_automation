@@ -22,6 +22,7 @@ ENV DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build
 ENV REDIS_URL=redis://127.0.0.1:6379
 RUN npm run build
 
-# Default: run Next.js (DB push + seed + start). Override CMD to run worker.
-# For production you may want: prisma migrate deploy && next start (no seed).
-CMD ["npm", "start"]
+# Default: run Next.js (migrate + seed + start). Override CMD to run worker.
+# Remove db seed if you don't want to re-seed on every restart.
+CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed && next start"]
+
