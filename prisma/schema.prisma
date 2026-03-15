@@ -416,7 +416,7 @@ model Execution {
   environmentId   String
   environment     Environment      @relation(fields: [environmentId], references: [id], onDelete: Restrict)
   testCaseId      String
-  testCase        TestCase         @relation(fields: [testCaseId], references: [id], onDelete: Restrict)
+  testCase        TestCase         @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
   status          ExecutionStatus  @default(QUEUED)
   duration        Int?             // milliseconds
   videoUrl        String?

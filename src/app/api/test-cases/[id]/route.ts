@@ -7,6 +7,7 @@ import { requirePermission } from "@/lib/auth/require-auth";
 import { PERMISSIONS } from "@/lib/auth/rbac";
 import { prisma } from "@/lib/db/client";
 import { updateTestCaseSchema } from "@/lib/validations/schemas";
+import { deleteExecutionArtifacts } from "@/lib/storage/s3";
 
 export async function GET(
   _req: NextRequest,
@@ -129,6 +130,20 @@ export async function DELETE(
   if (!testCase) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const ticketId = testCase.ticketId;
+
+  // Delete S3 artifacts (video, screenshots) for all executions *before* DB delete.
+  // Once we call testCase.delete(), the DB cascade deletes Execution rows and we no longer have their IDs.
+  try {
+    const executions = await prisma.execution.findMany({
+      where: { testCaseId: id },
+      select: { id: true },
+    });
+    await Promise.allSettled(executions.map((e) => deleteExecutionArtifacts(e.id)));
+  } catch {
+    // S3 not configured or list/delete failed; still proceed to delete test case and cascade executions.
+  }
+
+  // Deleting TestCase cascades to delete all related Execution rows (DB FK onDelete: Cascade).
   await prisma.testCase.delete({ where: { id } });
 
   if (ticketId) {

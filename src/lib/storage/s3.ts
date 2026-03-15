@@ -9,7 +9,9 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { getConfig } from "@/lib/config";
 
@@ -158,4 +160,36 @@ export function executionVideoKey(executionId: string): string {
 
 export function executionScreenshotKey(executionId: string, index: number): string {
   return `${executionArtifactPrefix(executionId)}screenshot-${index}.png`;
+}
+
+/**
+ * Delete all S3 objects under executions/{executionId}/ (video + screenshots).
+ * Call this before deleting an Execution (or before deleting a TestCase that cascades to Executions)
+ * so that storage is cleaned up. Safe to call when S3 is not configured or prefix is empty.
+ */
+export async function deleteExecutionArtifacts(executionId: string): Promise<void> {
+  const cfg = await getS3Config();
+  const client = createClient(cfg);
+  const prefix = prefixKey(executionArtifactPrefix(executionId), cfg.folder);
+  let continuationToken: string | undefined;
+  do {
+    const list = await client.send(
+      new ListObjectsV2Command({
+        Bucket: cfg.bucket,
+        Prefix: prefix,
+        MaxKeys: 1000,
+        ContinuationToken: continuationToken,
+      })
+    );
+    const keys = (list.Contents ?? []).map((o) => o.Key).filter((k): k is string => !!k);
+    if (keys.length > 0) {
+      await client.send(
+        new DeleteObjectsCommand({
+          Bucket: cfg.bucket,
+          Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+        })
+      );
+    }
+    continuationToken = list.IsTruncated ? list.NextContinuationToken : undefined;
+  } while (continuationToken);
 }

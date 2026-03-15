@@ -323,6 +323,7 @@ export default function ProjectDetailPage() {
   const [viewTcSaving, setViewTcSaving] = useState(false);
   const [viewTcError, setViewTcError] = useState("");
   const [tcConfirmAction, setTcConfirmAction] = useState<{ tcId: string; status: "READY" | "CANCEL" } | null>(null);
+  const [tcConfirmDeleteId, setTcConfirmDeleteId] = useState<string | null>(null);
   const [tcActionDropdownId, setTcActionDropdownId] = useState<string | null>(null);
   const tcActionDropdownRef = useRef<HTMLDivElement>(null);
   const [viewTcDragStepIndex, setViewTcDragStepIndex] = useState<number | null>(null);
@@ -1549,6 +1550,26 @@ export default function ProjectDetailPage() {
       }
     } catch {
       // ignore
+    } finally {
+      setTcConfirmAction(null);
+    }
+  };
+
+  const deleteTestCase = async (tcId: string) => {
+    try {
+      const res = await fetch(`/api/test-cases/${tcId}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        loadTestCases();
+        if (viewTestCase?.id === tcId) setViewTestCase(null);
+        toast.success("Test case deleted.");
+      } else {
+        toast.error((data.error as string) ?? "Failed to delete test case.");
+      }
+    } catch {
+      toast.error("Failed to delete test case.");
+    } finally {
+      setTcConfirmDeleteId(null);
     }
   };
 
@@ -3151,6 +3172,16 @@ export default function ProjectDetailPage() {
                                 Cancel
                               </button>
                             )}
+                            <button
+                              type="button"
+                              className="w-full px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 rounded-lg"
+                              onClick={() => {
+                                setTcActionDropdownId(null);
+                                setTcConfirmDeleteId(tc.id);
+                              }}
+                            >
+                              Delete
+                            </button>
                           </div>
                         )}
                       </div>
@@ -5512,6 +5543,19 @@ export default function ProjectDetailPage() {
           <DialogFooter>
             <Button type="button" variant="secondary" onClick={() => setTcConfirmAction(null)}>No</Button>
             <Button type="button" variant={tcConfirmAction?.status === "CANCEL" ? "danger" : "secondary"} onClick={() => { if (tcConfirmAction) { updateTestCaseStatus(tcConfirmAction.tcId, tcConfirmAction.status); setTcConfirmAction(null); } }}>Yes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!tcConfirmDeleteId} onOpenChange={(open) => !open && setTcConfirmDeleteId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete test case</DialogTitle>
+            <DialogDescription>Are you sure you want to delete this test case? This cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={() => setTcConfirmDeleteId(null)}>Cancel</Button>
+            <Button type="button" variant="danger" onClick={() => tcConfirmDeleteId && deleteTestCase(tcConfirmDeleteId)}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
