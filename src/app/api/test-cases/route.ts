@@ -32,24 +32,16 @@ export const GET = withApiKeyLogging(PERMISSIONS.VIEW_EXECUTION_RESULTS, async (
 
   const priorityEnum = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
   const statusEnum = ["DRAFT", "READY", "TESTING", "PASSED", "FAILED", "CANCEL", "IGNORE"] as const;
-  const where: {
-    projectId: string;
-    ticketId?: string;
-    priority?: (typeof priorityEnum)[number];
-    status?: (typeof statusEnum)[number];
-    testType?: "API" | "E2E";
-    platform?: string | null;
-    AND?: Array<unknown>;
-  } = {
+  const where: Prisma.TestCaseWhereInput = {
     projectId,
   };
   if (search) {
     where.AND = [
       {
         OR: [
-          { title: { contains: search, mode: "insensitive" as const } },
-          { ticket: { externalId: { contains: search, mode: "insensitive" as const } } },
-          { ticket: { title: { contains: search, mode: "insensitive" as const } } },
+          { title: { contains: search, mode: "insensitive" } },
+          { ticket: { externalId: { contains: search, mode: "insensitive" } } },
+          { ticket: { title: { contains: search, mode: "insensitive" } } },
         ],
       },
     ];
