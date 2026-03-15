@@ -24,5 +24,5 @@ RUN npm run build
 
 # Default: run Next.js (db push + seed + start). Override CMD to run worker.
 # Use migrate deploy only if DB was set up with migrations from the start.
-CMD ["sh", "-c", "npx prisma db push && npx prisma db seed && next start"]
+CMD ["sh", "-c", "npx prisma db push && npx prisma db seed && npx next start"]
 
