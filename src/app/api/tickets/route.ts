@@ -118,6 +118,29 @@ export const POST = withApiKeyLogging(PERMISSIONS.CREATE_TEST_CASES, async (req,
     projectId = project.id;
   }
 
+  let applicationIds: string[] | undefined;
+  if (parsed.data.applicationIds?.length) {
+    applicationIds = parsed.data.applicationIds;
+  } else if (parsed.data.applicationCodes?.length) {
+    const codes = [...new Set(parsed.data.applicationCodes.map((c) => c.trim()).filter(Boolean))];
+    const apps = await prisma.application.findMany({
+      where: {
+        projectId,
+        OR: codes.map((code) => ({ code: { equals: code, mode: "insensitive" } })),
+      },
+      select: { id: true, code: true },
+    });
+    const foundCodes = new Set(apps.map((a) => a.code.toUpperCase()));
+    const missing = codes.filter((c) => !foundCodes.has(c.toUpperCase()));
+    if (missing.length) {
+      return NextResponse.json(
+        { error: `Application(s) not found for project: ${missing.join(", ")}` },
+        { status: 404 }
+      );
+    }
+    applicationIds = apps.map((a) => a.id);
+  }
+
   const isApiKeyAuth = auth.userId === "api-key";
   const ticket = await prisma.ticket.create({
     data: {
@@ -128,7 +151,7 @@ export const POST = withApiKeyLogging(PERMISSIONS.CREATE_TEST_CASES, async (req,
       status: isApiKeyAuth ? "READY_TO_TEST" : "DRAFT",
       externalId: parsed.data.externalId ?? null,
       priority: parsed.data.priority ?? null,
-      applicationIds: parsed.data.applicationIds?.length ? parsed.data.applicationIds : Prisma.DbNull,
+      applicationIds: applicationIds?.length ? applicationIds : Prisma.DbNull,
       primaryActor: parsed.data.primaryActor ?? null,
     },
   });

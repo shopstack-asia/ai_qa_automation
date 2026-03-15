@@ -113,3 +113,33 @@ export async function PATCH(
     dataRequirement: testCase.dataRequirement ?? [],
   });
 }
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await requirePermission(PERMISSIONS.EDIT_TEST_CASES);
+  if (auth instanceof NextResponse) return auth;
+
+  const { id } = await params;
+  const testCase = await prisma.testCase.findUnique({
+    where: { id },
+    select: { id: true, ticketId: true },
+  });
+  if (!testCase) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const ticketId = testCase.ticketId;
+  await prisma.testCase.delete({ where: { id } });
+
+  if (ticketId) {
+    const remaining = await prisma.testCase.count({ where: { ticketId } });
+    if (remaining === 0) {
+      await prisma.ticket.update({
+        where: { id: ticketId },
+        data: { status: "CANCEL" },
+      });
+    }
+  }
+
+  return NextResponse.json({ ok: true });
+}

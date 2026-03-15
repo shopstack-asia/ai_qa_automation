@@ -64,7 +64,7 @@ Generate ONLY ONE test case for the given scenario. Return ONLY valid JSON (no m
   "data_requirement": [],
   "preconditions": ["string"],
   "steps": ["string (use {{alias.field}} if needed; no login/authentication steps)"],
-  "expected_results": ["string"]
+  "expected_results": ["string - REQUIRED: one or more sentences describing the expected outcome after all steps (e.g. selection is rejected, error message shown, UI reflects new state)"]
 }
 `;
 
@@ -184,8 +184,13 @@ function normalizeAITestCaseItem(item: unknown): Record<string, unknown> {
     });
   }
   let expectedResult: string | undefined;
-  if (typeof o.expectedResult === "string") {
-    expectedResult = o.expectedResult;
+  if (typeof o.expectedResult === "string" && o.expectedResult.trim()) {
+    expectedResult = o.expectedResult.trim();
+  } else if (Array.isArray(o.expected_results) && o.expected_results.length > 0) {
+    const parts = o.expected_results
+      .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+      .map((x) => x.trim());
+    expectedResult = parts.length > 0 ? parts.join("\n") : undefined;
   } else if (Array.isArray(steps) && steps.length > 0) {
     const last = steps[steps.length - 1];
     if (last && typeof last === "object" && "expected_result" in last && typeof (last as { expected_result?: string }).expected_result === "string") {

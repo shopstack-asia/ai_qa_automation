@@ -113,13 +113,20 @@ export const DELETE = withApiKeyLogging(PERMISSIONS.EDIT_TEST_CASES, async (_req
       { status: 400 }
     );
   }
-  if ((ticket._count?.testCases ?? 0) > 0) {
+  const hasTestCases = (ticket._count?.testCases ?? 0) > 0;
+  if (ticket.status === "DRAFT" && hasTestCases) {
     return NextResponse.json(
       { error: "Cannot delete a ticket that has related test cases. Remove or unlink test cases first." },
       { status: 400 }
     );
   }
 
+  if (ticket.status === "CANCEL" && hasTestCases) {
+    await prisma.testCase.updateMany({
+      where: { ticketId: id },
+      data: { ticketId: null },
+    });
+  }
   await prisma.ticket.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 });

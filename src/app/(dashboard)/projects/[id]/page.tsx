@@ -36,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Download, GripVertical, History, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, Download, GripVertical, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
 import { VideoPreview } from "@/components/executions/video-preview";
 import { getExecutionDisplayStatus, executionStatusBadgeVariant } from "@/lib/execution-status";
 
@@ -106,6 +106,7 @@ interface TestCaseRow {
   setup_hint: string | null;
   ignoreReason: string | null;
   ticketId: string | null;
+  ticket?: { title: string; externalId: string | null } | null;
   updatedAt: string;
 }
 
@@ -178,6 +179,8 @@ export default function ProjectDetailPage() {
   const [tcStatus, setTcStatus] = useState("");
   const [tcTestType, setTcTestType] = useState("");
   const [tcPlatform, setTcPlatform] = useState("");
+  const [tcTicketId, setTcTicketId] = useState("");
+  const [tcTicketOptions, setTcTicketOptions] = useState<{ id: string; title: string; externalId: string | null }[]>([]);
   const [tcSortBy, setTcSortBy] = useState<"title" | "priority" | "status" | "updatedAt">("updatedAt");
   const [tcSortOrder, setTcSortOrder] = useState<"asc" | "desc">("desc");
   const [tcLoading, setTcLoading] = useState(false);
@@ -464,6 +467,17 @@ export default function ProjectDetailPage() {
     loadTicketApplicationOptions();
   }, [id, projectDetailTab]);
 
+  useEffect(() => {
+    if (!id || projectDetailTab !== "test-cases") return;
+    fetch(`/api/tickets?projectId=${id}&limit=100&page=1`)
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((res) => {
+        const list = Array.isArray(res.data) ? res.data : [];
+        setTcTicketOptions(list.map((t: { id: string; title: string; externalId: string | null }) => ({ id: t.id, title: t.title, externalId: t.externalId ?? null })));
+      })
+      .catch(() => setTcTicketOptions([]));
+  }, [id, projectDetailTab]);
+
   const loadApplications = () => {
     if (!id) return;
     setAppLoading(true);
@@ -505,6 +519,7 @@ export default function ProjectDetailPage() {
       sortOrder: tcSortOrder,
     });
     if (tcSearch) params.set("search", tcSearch);
+    if (tcTicketId) params.set("ticketId", tcTicketId);
     if (tcPriority) params.set("priority", tcPriority);
     if (tcStatus) params.set("status", tcStatus);
     if (tcTestType) params.set("testType", tcTestType);
@@ -523,7 +538,7 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     if (!id) return;
     loadTestCases();
-  }, [id, tcPage, tcLimit, tcSearch, tcPriority, tcStatus, tcTestType, tcPlatform, tcSortBy, tcSortOrder]);
+  }, [id, tcPage, tcLimit, tcSearch, tcTicketId, tcPriority, tcStatus, tcTestType, tcPlatform, tcSortBy, tcSortOrder]);
 
   const loadTestRuns = () => {
     if (!id) return;
@@ -2820,10 +2835,10 @@ export default function ProjectDetailPage() {
                           )}
                         </div>
                       )}
-                      {(t.status === "DONE" || (t.status === "CANCEL" && (t._count?.testCases ?? 0) > 0)) && (
+                      {t.status === "DONE" && (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
-                      {t.status === "CANCEL" && (t._count?.testCases ?? 0) === 0 && (
+                      {t.status === "CANCEL" && (
                         <Button
                           type="button"
                           variant="secondary"
@@ -2863,7 +2878,7 @@ export default function ProjectDetailPage() {
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <Input
-              placeholder="Search by title…"
+              placeholder="Search by title or ticket external ID…"
               value={tcSearchInput}
               onChange={(e) => setTcSearchInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && applyTcSearch()}
@@ -2872,6 +2887,16 @@ export default function ProjectDetailPage() {
             <Button type="button" variant="secondary" size="sm" onClick={applyTcSearch}>
               Search
             </Button>
+            <select
+              value={tcTicketId}
+              onChange={(e) => { setTcTicketId(e.target.value); setTcPage(1); }}
+              className={`${selectClassInline} max-w-[200px]`}
+            >
+              <option value="">All tickets</option>
+              {tcTicketOptions.map((t) => (
+                <option key={t.id} value={t.id}>{t.title} ({t.externalId ?? "—"})</option>
+              ))}
+            </select>
             <select
               value={tcPriority}
               onChange={(e) => { setTcPriority(e.target.value); setTcPage(1); }}
@@ -3026,7 +3051,15 @@ export default function ProjectDetailPage() {
               ) : (
                 testCases.map((tc) => (
                   <TableRow key={tc.id}>
-                    <TableCell className="font-medium">{tc.title}</TableCell>
+                    <TableCell>
+                      <div className="font-medium">{tc.title}</div>
+                      {tc.ticket && (
+                        <div className="mt-0.5 text-xs text-muted-foreground space-y-0.5 max-w-[280px]">
+                          <div className="truncate" title={tc.ticket.title}>{tc.ticket.title}</div>
+                          <div className="truncate" title={tc.ticket.externalId ?? undefined}>{tc.ticket.externalId ?? "—"}</div>
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell title={tc.status === "IGNORE" && tc.ignoreReason ? tc.ignoreReason : undefined}>
                       <Badge
                         variant={
@@ -3063,37 +3096,50 @@ export default function ProjectDetailPage() {
                       {tc.updatedAt ? new Date(tc.updatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—"}
                     </TableCell>
                     <TableCell className="relative overflow-visible space-x-2">
-                      <Button type="button" variant="secondary" size="sm" onClick={() => openViewTc(tc)}>
-                        View
-                      </Button>
-                      {tc.status !== "DRAFT" && (
-                        <Button type="button" variant="secondary" size="sm" onClick={() => openTcHistory(tc)}>
-                          <History className="h-3.5 w-3.5 mr-1" />
-                          History
+                      <div ref={tcActionDropdownId === tc.id ? tcActionDropdownRef : null} className="relative inline-flex rounded-md border border-border">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="rounded-r-none border-0 border-r border-border"
+                          onClick={() => openViewTc(tc)}
+                        >
+                          View
                         </Button>
-                      )}
-                      {tc.status === "DRAFT" && (
-                        <div ref={tcActionDropdownId === tc.id ? tcActionDropdownRef : null} className="relative inline-flex rounded-md border border-border">
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            className="rounded-r-none border-0 border-r border-border"
-                            onClick={() => setTcConfirmAction({ tcId: tc.id, status: "READY" })}
-                          >
-                            Ready
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            size="sm"
-                            className="rounded-l-none px-1.5"
-                            onClick={() => setTcActionDropdownId((cur) => (cur === tc.id ? null : tc.id))}
-                          >
-                            <ChevronDown className="h-3.5 w-3.5 opacity-70" />
-                          </Button>
-                          {tcActionDropdownId === tc.id && (
-                            <div className="absolute right-0 top-full z-[100] mt-1.5 min-w-[8rem] rounded-lg border border-border bg-surface py-1 shadow-xl ring-1 ring-black/10 dark:ring-white/10">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="rounded-l-none px-1.5"
+                          onClick={() => setTcActionDropdownId((cur) => (cur === tc.id ? null : tc.id))}
+                        >
+                          <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+                        </Button>
+                        {tcActionDropdownId === tc.id && (
+                          <div className="absolute left-0 top-full z-[100] mt-1.5 min-w-[8rem] rounded-lg border border-border bg-surface py-1 shadow-xl ring-1 ring-black/10 dark:ring-white/10">
+                            <button
+                              type="button"
+                              className="w-full px-3 py-2 text-left text-sm hover:bg-elevated rounded-lg flex items-center gap-2"
+                              onClick={() => {
+                                setTcActionDropdownId(null);
+                                openViewTc(tc);
+                              }}
+                            >
+                              View
+                            </button>
+                            {tc.status !== "DRAFT" && (
+                              <button
+                                type="button"
+                                className="w-full px-3 py-2 text-left text-sm hover:bg-elevated rounded-lg"
+                                onClick={() => {
+                                  setTcActionDropdownId(null);
+                                  openTcHistory(tc);
+                                }}
+                              >
+                                History
+                              </button>
+                            )}
+                            {(tc.status === "DRAFT" || tc.status === "READY" || tc.status === "FAILED") && (
                               <button
                                 type="button"
                                 className="w-full px-3 py-2 text-left text-sm text-destructive hover:bg-destructive/10 rounded-lg"
@@ -3104,9 +3150,19 @@ export default function ProjectDetailPage() {
                               >
                                 Cancel
                               </button>
-                            </div>
-                          )}
-                        </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {tc.status === "DRAFT" && (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setTcConfirmAction({ tcId: tc.id, status: "READY" })}
+                        >
+                          Ready
+                        </Button>
                       )}
                     </TableCell>
                   </TableRow>
@@ -5260,7 +5316,7 @@ export default function ProjectDetailPage() {
                             ? [viewTcLinkedTicket, ...tickets]
                             : tickets
                           ).map((t) => (
-                            <option key={t.id} value={t.id}>{t.title}</option>
+                            <option key={t.id} value={t.id}>{t.title} ({t.externalId ?? "—"})</option>
                           ))}
                         </select>
                       </div>
@@ -5386,7 +5442,7 @@ export default function ProjectDetailPage() {
                 <SheetBody>
                   <dl className="space-y-4 text-sm">
                     <div><dt className="text-muted-foreground font-medium">Project</dt><dd className="mt-0.5 text-foreground">{project?.name ?? "—"}</dd></div>
-                    <div><dt className="text-muted-foreground font-medium">Ticket</dt><dd className="mt-0.5 text-foreground">{viewTcLinkedTicket ? viewTcLinkedTicket.title : "—"}</dd></div>
+                    <div><dt className="text-muted-foreground font-medium">Ticket</dt><dd className="mt-0.5 text-foreground">{viewTcLinkedTicket ? `${viewTcLinkedTicket.title} (${viewTcLinkedTicket.externalId ?? "—"})` : "—"}</dd></div>
                     <div><dt className="text-muted-foreground font-medium">Application</dt><dd className="mt-0.5 text-foreground">{viewTestCase.application ? `${viewTestCase.application.name}${viewTestCase.application.code ? ` (${viewTestCase.application.code})` : ""}` : "—"}</dd></div>
                     {viewTestCase.status === "IGNORE" && viewTestCase.ignoreReason && (
                       <div><dt className="text-muted-foreground font-medium">Ignore reason</dt><dd className="mt-0.5 text-amber-600 dark:text-amber-400 whitespace-pre-wrap">{viewTestCase.ignoreReason}</dd></div>

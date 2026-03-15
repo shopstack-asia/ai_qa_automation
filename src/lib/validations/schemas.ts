@@ -107,6 +107,7 @@ export const createTicketSchema = z
     externalId: z.string().max(255).optional(),
     priority: z.string().max(64).optional(),
     applicationIds: z.array(z.string().cuid()).optional(),
+    applicationCodes: z.array(z.string().min(1).max(255)).optional(), // e.g. ["WEB", "API"] – resolved to ids by project
     primaryActor: z.string().max(100).optional().nullable(),
   })
   .refine(
@@ -116,6 +117,14 @@ export const createTicketSchema = z
       return hasId !== hasKey; // exactly one
     },
     { message: "Provide exactly one of projectId or projectKey" }
+  )
+  .refine(
+    (data) => {
+      const hasIds = (data.applicationIds?.length ?? 0) > 0;
+      const hasCodes = (data.applicationCodes?.length ?? 0) > 0;
+      return !hasIds || !hasCodes; // do not send both
+    },
+    { message: "Provide at most one of applicationIds or applicationCodes" }
   );
 
 export const updateTicketSchema = z.object({

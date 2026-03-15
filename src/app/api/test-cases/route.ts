@@ -19,6 +19,7 @@ export const GET = withApiKeyLogging(PERMISSIONS.VIEW_EXECUTION_RESULTS, async (
   }
 
   const search = req.nextUrl.searchParams.get("search")?.trim() ?? "";
+  const ticketId = req.nextUrl.searchParams.get("ticketId")?.trim() || undefined;
   const priority = req.nextUrl.searchParams.get("priority")?.trim() || undefined;
   const status = req.nextUrl.searchParams.get("status")?.trim() || undefined;
   const testType = req.nextUrl.searchParams.get("testType")?.trim() || undefined;
@@ -31,12 +32,29 @@ export const GET = withApiKeyLogging(PERMISSIONS.VIEW_EXECUTION_RESULTS, async (
 
   const priorityEnum = ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const;
   const statusEnum = ["DRAFT", "READY", "TESTING", "PASSED", "FAILED", "CANCEL", "IGNORE"] as const;
-  const where: { projectId: string; title?: { contains: string; mode: "insensitive" }; priority?: (typeof priorityEnum)[number]; status?: (typeof statusEnum)[number]; testType?: "API" | "E2E"; platform?: string | null } = {
+  const where: {
+    projectId: string;
+    ticketId?: string;
+    priority?: (typeof priorityEnum)[number];
+    status?: (typeof statusEnum)[number];
+    testType?: "API" | "E2E";
+    platform?: string | null;
+    AND?: Array<unknown>;
+  } = {
     projectId,
   };
   if (search) {
-    where.title = { contains: search, mode: "insensitive" };
+    where.AND = [
+      {
+        OR: [
+          { title: { contains: search, mode: "insensitive" as const } },
+          { ticket: { externalId: { contains: search, mode: "insensitive" as const } } },
+          { ticket: { title: { contains: search, mode: "insensitive" as const } } },
+        ],
+      },
+    ];
   }
+  if (ticketId) where.ticketId = ticketId;
   if (priority && priorityEnum.includes(priority as (typeof priorityEnum)[number])) where.priority = priority as (typeof priorityEnum)[number];
   if (status && statusEnum.includes(status as (typeof statusEnum)[number])) where.status = status as (typeof statusEnum)[number];
   if (testType === "API" || testType === "E2E") where.testType = testType;
@@ -66,6 +84,7 @@ export const GET = withApiKeyLogging(PERMISSIONS.VIEW_EXECUTION_RESULTS, async (
         setup_hint: true,
         ignoreReason: true,
         ticketId: true,
+        ticket: { select: { title: true, externalId: true } },
         primaryActor: true,
         source: true,
         createdAt: true,
