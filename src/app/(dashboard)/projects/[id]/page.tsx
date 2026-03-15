@@ -4665,21 +4665,6 @@ export default function ProjectDetailPage() {
                   </form>
                 ) : (
                   <div className="space-y-4 text-sm">
-                    {Array.isArray(viewTicket.applicationIds) && viewTicket.applicationIds.length > 0 && (
-                      <div>
-                        <span className="font-medium text-muted-foreground">Applications</span>
-                        <div className="mt-1.5 flex flex-wrap gap-1.5">
-                          {viewTicket.applicationIds.map((appId) => {
-                            const app = ticketApplicationOptions.find((a) => a.id === appId);
-                            return (
-                              <Badge key={appId} variant="default">
-                                {app ? `${app.name} (${app.code})` : appId}
-                              </Badge>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
                     {viewTicket.description && (
                       <div>
                         <span className="font-medium text-muted-foreground">Description</span>
@@ -4692,6 +4677,23 @@ export default function ProjectDetailPage() {
                         <p className="mt-0.5 whitespace-pre-wrap text-foreground">{viewTicket.acceptanceCriteria}</p>
                       </div>
                     )}
+                    <div>
+                      <span className="font-medium text-muted-foreground">Applications</span>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {Array.isArray(viewTicket.applicationIds) && viewTicket.applicationIds.length > 0 ? (
+                          viewTicket.applicationIds.map((appId) => {
+                            const app = ticketApplicationOptions.find((a) => a.id === appId);
+                            return (
+                              <Badge key={appId} variant="default">
+                                {app ? `${app.name} (${app.code})` : appId}
+                              </Badge>
+                            );
+                          })
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </div>
+                    </div>
                     <div className="grid grid-cols-3 gap-2">
                       <div className="rounded-md border border-border bg-muted/20 px-3 py-2">
                         <dt className="text-xs text-muted-foreground font-medium">Priority</dt>
