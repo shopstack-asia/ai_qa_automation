@@ -270,7 +270,7 @@ export default function ProjectDetailPage() {
   const [importDragOver, setImportDragOver] = useState(false);
   const [importError, setImportError] = useState("");
   const [importSubmitting, setImportSubmitting] = useState(false);
-  const [importResult, setImportResult] = useState<number | null>(null);
+  const [importResult, setImportResult] = useState<{ created: number; duplicates: number } | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
   const [viewTicket, setViewTicket] = useState<TicketRow | null>(null);
   const [ticketActionDropdownId, setTicketActionDropdownId] = useState<string | null>(null);
@@ -1476,7 +1476,10 @@ export default function ProjectDetailPage() {
         setImportError(data.error?.message ?? (typeof data.error === "object" ? "Import failed" : data.error) ?? "Import failed");
         return;
       }
-      setImportResult(data.created ?? tickets.length);
+      setImportResult({
+        created: data.created ?? tickets.length,
+        duplicates: Array.isArray(data.duplicates) ? data.duplicates.length : 0,
+      });
       setImportFile(null);
       loadTickets();
       if (project) setProject({ ...project, ticketsCount: (project.ticketsCount ?? 0) + (data.created ?? 0) });
@@ -2549,6 +2552,10 @@ export default function ProjectDetailPage() {
             <CardDescription>Source items for creating test cases</CardDescription>
           </div>
           <div className="flex items-center gap-2">
+            <Button size="sm" variant="secondary" onClick={() => loadTickets()}>
+              <RefreshCw className="h-4 w-4 mr-1.5" />
+              Refresh
+            </Button>
             <Button size="sm" variant="secondary" onClick={openImportDialog}>
               Import
             </Button>
@@ -5047,7 +5054,12 @@ export default function ProjectDetailPage() {
                 )}
               </div>
               {importError && <p className="text-sm text-destructive">{importError}</p>}
-              {importResult != null && <p className="text-sm text-success">Imported {importResult} tickets successfully</p>}
+              {importResult != null && (
+                <p className="text-sm text-success">
+                  Imported {importResult.created} tickets successfully
+                  {importResult.duplicates > 0 && ` (skipped ${importResult.duplicates} duplicate external IDs)`}
+                </p>
+              )}
             </div>
           </SheetBody>
         </SheetContent>

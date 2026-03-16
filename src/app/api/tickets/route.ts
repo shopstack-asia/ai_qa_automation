@@ -118,6 +118,14 @@ export const POST = withApiKeyLogging(PERMISSIONS.CREATE_TEST_CASES, async (req,
     projectId = project.id;
   }
 
+  const externalId = parsed.data.externalId?.trim();
+  if (externalId) {
+    const dup = await prisma.ticket.findFirst({ where: { projectId, externalId }, select: { id: true } });
+    if (dup) {
+      return NextResponse.json({ error: "Ticket with this external ID already exists in this project." }, { status: 409 });
+    }
+  }
+
   let applicationIds: string[] | undefined;
   if (parsed.data.applicationIds?.length) {
     applicationIds = parsed.data.applicationIds;

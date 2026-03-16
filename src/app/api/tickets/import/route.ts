@@ -17,22 +17,46 @@ export const POST = withApiKeyLogging(PERMISSIONS.CREATE_TEST_CASES, async (req)
   }
 
   const { projectId, tickets } = parsed.data;
-  const created = await prisma.$transaction(
-    tickets.map((t) =>
-      prisma.ticket.create({
-        data: {
-          projectId,
-          title: t.title,
-          description: t.description ?? null,
-          acceptanceCriteria: t.acceptanceCriteria ?? null,
-          status: "DRAFT",
-          externalId: t.externalId ?? null,
-          priority: t.priority ?? null,
-          applicationIds: t.applicationIds?.length ? t.applicationIds : Prisma.DbNull,
-        },
+
+  const externalIds = tickets.map((t) => t.externalId?.trim()).filter((id): id is string => !!id);
+  const existing = externalIds.length
+    ? await prisma.ticket.findMany({
+        where: { projectId, externalId: { in: externalIds } },
+        select: { id: true, externalId: true },
       })
-    )
-  );
+    : [];
+  const existingSet = new Set(existing.map((e) => e.externalId).filter((id): id is string => !!id));
+
+  const toCreate = tickets.filter((t) => {
+    const ext = t.externalId?.trim();
+    return !ext || !existingSet.has(ext);
+  });
+  const duplicates = tickets
+    .filter((t) => {
+      const ext = t.externalId?.trim();
+      return !!ext && existingSet.has(ext);
+    })
+    .map((t) => t.externalId!.trim());
+
+  const created =
+    toCreate.length > 0
+      ? await prisma.$transaction(
+          toCreate.map((t) =>
+            prisma.ticket.create({
+              data: {
+                projectId,
+                title: t.title,
+                description: t.description ?? null,
+                acceptanceCriteria: t.acceptanceCriteria ?? null,
+                status: "DRAFT",
+                externalId: t.externalId ?? null,
+                priority: t.priority ?? null,
+                applicationIds: t.applicationIds?.length ? t.applicationIds : Prisma.DbNull,
+              },
+            })
+          )
+        )
+      : [];
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -45,5 +69,9 @@ export const POST = withApiKeyLogging(PERMISSIONS.CREATE_TEST_CASES, async (req)
     }).catch(() => {});
   }
 
-  return NextResponse.json({ created: created.length, ids: created.map((c) => c.id) });
+  return NextResponse.json({
+    created: created.length,
+    ids: created.map((c) => c.id),
+    duplicates,
+  });
 });
